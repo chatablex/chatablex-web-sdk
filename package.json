@@ -1,0 +1,48 @@
+{
+  "name": "chatablex-web-sdk",
+  "version": "1.0.0",
+  "description": "ChatableX Web SDK for AI App WebUI development. Provides bridge communication with the ChatableX Flutter client.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "chatablex",
+    "sdk",
+    "webui",
+    "ai",
+    "flutter",
+    "webview",
+    "bridge"
+  ],
+  "author": "ChatableX Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ersa-org/co-work.git",
+    "directory": "chatablex-web-sdk"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
