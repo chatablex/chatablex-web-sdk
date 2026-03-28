@@ -1,31 +1,31 @@
 # chatablex-web-sdk
 
-English | [**简体中文**](README.zh-CN.md)
+[**English**](README.md) | 简体中文
 
-Runtime SDK for building **ChatableX AI App** WebUI applications.
+用于构建 **ChatableX AI App** WebUI 应用的运行时 SDK。
 
-Unlike a type-only package, this SDK contains the actual bridge runtime that connects your web app to the ChatableX Flutter host. You must install it as a dependency — the platform does **not** inject it for you.
+与仅提供类型的包不同，本 SDK 包含将 Web 应用连接到 ChatableX Flutter 宿主的真实桥接运行时。你必须将其作为依赖安装 —— 平台**不会**替你注入。
 
-## Install
+## 安装
 
 ```bash
 npm install chatablex-web-sdk
-# or link locally during development:
+# 本地开发时可使用 link：
 npm install ../chatablex-web-sdk
 ```
 
-## Quick Start
+## 快速开始
 
 ```tsx
 import { ChatableX } from 'chatablex-web-sdk';
 
-// Initialize — connects to the Flutter WebView host
+// 初始化 —— 连接 Flutter WebView 宿主
 const sdk = await ChatableX.init({ appId: 'my-app', debug: true });
 
-// Register a tool handler (called when the LLM invokes your tool)
+// 注册工具处理器（当 LLM 调用你的工具时触发）
 sdk.tool.onExecute(async (params) => {
   const { action, value } = params;
-  // ... perform action, update UI ...
+  // ... 执行操作、更新 UI ...
   return { success: true, result: 42 };
 });
 ```
@@ -34,13 +34,13 @@ sdk.tool.onExecute(async (params) => {
 
 ### `ChatableX.init(config)`
 
-| Option    | Type    | Default | Description |
-|-----------|---------|---------|-------------|
-| `appId`   | string  | —       | **Required.** Must match your `manifest.json` `id`. |
-| `debug`   | boolean | false   | Print debug logs to console. |
-| `timeout` | number  | 10000   | Handshake timeout in ms. |
+| 选项      | 类型    | 默认值 | 说明 |
+|-----------|---------|--------|------|
+| `appId`   | string  | —      | **必填。**须与 `manifest.json` 中的 `id` 一致。 |
+| `debug`   | boolean | false  | 是否在控制台打印调试日志。 |
+| `timeout` | number  | 10000  | 握手超时时间（毫秒）。 |
 
-Returns `Promise<ChatableXSDK>`.
+返回 `Promise<ChatableXSDK>`。
 
 ### `sdk.tool`
 
@@ -91,7 +91,7 @@ const tools = await sdk.tools.list();
 const result = await sdk.tools.execute('other-tool', { q: 'test' });
 ```
 
-## Architecture
+## 架构
 
 ```
 Your App (React/Vue/Vanilla)
@@ -99,23 +99,23 @@ Your App (React/Vue/Vanilla)
     │
     ▼
 ┌─────────────────────────────────────┐
-│  chatablex-web-sdk (this package)   │
+│  chatablex-web-sdk（本包）            │
 │                                     │
-│  Bridge layer:                      │
+│  桥接层：                            │
 │    JS → Flutter: ChatableXBridge    │
 │    Flutter → JS: ChatableXReceive   │
 │                                     │
-│  Modules: tool, events, ai, ui,    │
-│           storage, tools, skills    │
+│  模块：tool, events, ai, ui,        │
+│        storage, tools, skills       │
 └──────────────┬──────────────────────┘
                │  WebView Bridge
                ▼
 ┌─────────────────────────────────────┐
-│  ChatableX Flutter Client           │
-│  (owns chat UI, SSE stream, agent)  │
+│  ChatableX Flutter 客户端            │
+│  （承载聊天 UI、SSE 流、Agent）       │
 └─────────────────────────────────────┘
 ```
 
-## License
+## 许可证
 
 MIT
