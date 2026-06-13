@@ -31,8 +31,6 @@ jobs:
   publish:
     name: Test, build & publish
     runs-on: ubuntu-latest
-    env:
-      NPM_CONFIG_LOGLEVEL: verbose
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,24 +41,27 @@ jobs:
           node-version: '22'
           cache: npm
 
+      - name: Upgrade npm for Trusted Publishing
+        run: |
+          echo "=== before upgrade ==="
+          node --version
+          npm --version
+          npm install -g npm@latest
+          echo "=== after upgrade ==="
+          node --version
+          npm --version
+
       - name: Install dependencies
         run: |
           echo "=== npm ci ==="
           npm ci
-          echo "=== npm version (Trusted Publishing requires npm >= 11.5.1) ==="
-          npm --version
-          echo "=== installed packages ==="
           npm ls --depth=0 || true
 
       - name: Typecheck
-        run: |
-          echo "=== npm run typecheck ==="
-          npm run typecheck
+        run: npm run typecheck
 
       - name: Test
-        run: |
-          echo "=== npm test ==="
-          npm test
+        run: npm test
 
       - name: Resolve version from tag
         id: version
@@ -72,38 +73,23 @@ jobs:
           echo "Publishing chatablex-web-sdk@${VERSION} (tag ${TAG})"
 
       - name: Sync package.json version
-        run: |
-          echo "=== sync version to ${{ steps.version.outputs.version }} ==="
-          node scripts/sync-version.mjs "${{ steps.version.outputs.version }}"
-          echo "=== package.json version ==="
-          node -p "require('./package.json').version"
+        run: node scripts/sync-version.mjs "${{ steps.version.outputs.version }}"
 
       - name: Build
         run: |
-          echo "=== npm run build ==="
           npm run build
-          echo "=== dist contents ==="
           ls -la dist/
 
       - name: Verify published artifacts
         run: |
-          echo "=== verify dist artifacts ==="
           test -f dist/index.js
           test -f dist/index.mjs
           test -f dist/index.d.ts
           node -e "
             const pkg = require('./package.json');
             const dist = require('fs').readFileSync('dist/index.js', 'utf8');
-            console.log('package.json version:', pkg.version);
-            if (pkg.version !== '${{ steps.version.outputs.version }}') {
-              console.error('VERSION MISMATCH: expected ${{ steps.version.outputs.version }}');
-              process.exit(1);
-            }
-            if (!dist.includes(pkg.version)) {
-              console.error('dist/index.js does not embed package version');
-              process.exit(1);
-            }
-            console.log('artifact verification passed');
+            if (pkg.version !== '${{ steps.version.outputs.version }}') process.exit(1);
+            if (!dist.includes(pkg.version)) process.exit(1);
           "
 
       - name: Configure npm registry for Trusted Publishing
@@ -113,48 +99,5 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Publish to npm
-        run: |
-          echo "=== npm publish via Trusted Publishing (OIDC) ==="
-          echo "repository: $(node -p "require('./package.json').repository.url")"
-          echo "package: $(node -p "require('./package.json').name")"
-          echo "version: $(node -p "require('./package.json').version")"
-          echo "workflow: ${GITHUB_WORKFLOW}"
-          echo "ref: ${GITHUB_REF}"
-
-          set +e
-          npm publish --access public --loglevel verbose 2>&1 | tee /tmp/npm-publish.log
-          PUBLISH_EXIT=${PIPESTATUS[0]}
-          set -e
-
-          if [ "$PUBLISH_EXIT" -ne 0 ]; then
-            echo "::error::npm publish failed with exit code $PUBLISH_EXIT"
-            echo ""
-            echo "=== publish stdout/stderr (replay) ==="
-            cat /tmp/npm-publish.log || true
-            echo ""
-            echo "=== npm debug logs ==="
-            if ls "$HOME/.npm/_logs/"*-debug-*.log 1>/dev/null 2>&1; then
-              for f in "$HOME/.npm/_logs/"*-debug-*.log; do
-                echo "--- $f ---"
-                cat "$f"
-              done
-            else
-              echo "(no npm debug logs found)"
-            fi
-            echo ""
-            echo "=== common causes (Trusted Publishing) ==="
-            if grep -q "ENEEDAUTH" /tmp/npm-publish.log; then
-              echo "::error::ENEEDAUTH: check npm Trusted Publisher settings:"
-              echo "::error::  Repository must be chatablex/chatablex-web-sdk"
-              echo "::error::  Workflow filename must be publish.yml (exact match)"
-              echo "::error::  Workflow must have permissions.id-token: write"
-              echo "::error::  package.json repository.url must match this GitHub repo"
-            fi
-            if grep -q "E403" /tmp/npm-publish.log; then
-              echo "::error::E403: trusted publisher config may not allow this workflow/environment."
-            fi
-            exit "$PUBLISH_EXIT"
-          fi
-
-          echo "=== publish succeeded ==="
-          npm view chatablex-web-sdk version
+        shell: bash
+        run: bash scripts/publish-npm-ci.sh
