@@ -26,6 +26,7 @@ import { createUIModule } from './modules/ui';
 import { createStorageModule } from './modules/storage';
 import { createToolsModule } from './modules/tools';
 import { createSkillsModule } from './modules/skills';
+import { createPlatformModule } from './modules/platform';
 import type { ChatableXSDK, ChatableXInitConfig, ToolInfo } from './types';
 
 export const SDK_VERSION = '1.0.0';
@@ -85,6 +86,7 @@ export const ChatableX = {
       events: createEventsModule(bridge),
       storage: createStorageModule(bridge),
       tool: toolModule,
+      platform: createPlatformModule(bridge),
     };
 
     // Expose on window for debugging / Flutter interop

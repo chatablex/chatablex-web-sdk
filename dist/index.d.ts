@@ -181,6 +181,10 @@ interface ChatableXToolModule {
     getInfo(): ToolInfo;
     onExecute(handler: ToolExecuteHandler): void;
 }
+interface ChatableXPlatform {
+    /** Open URL in system browser with auth handoff (WebView only; implemented by Flutter host). */
+    openInBrowser(targetUrl: string): Promise<void>;
+}
 interface ChatableXSDK {
     ai: ChatableXAI;
     tools: ChatableXTools;
@@ -189,6 +193,7 @@ interface ChatableXSDK {
     events: ChatableXEvents;
     storage: ChatableXStorage;
     tool: ChatableXToolModule;
+    platform: ChatableXPlatform;
 }
 declare global {
     interface Window {
@@ -277,4 +282,4 @@ declare const ChatableX: {
     version: string;
 };
 
-export { type AiResponseEventData, Bridge, type ChatOptions, type ChatResponse, ChatableX, type ChatableXAI, type ChatableXEvents, type ChatableXInitConfig, type ChatableXSDK, type ChatableXSkills, type ChatableXStorage, type ChatableXToolModule, type ChatableXTools, type ChatableXUI, type CloseEventData, type EventCallbackMap, type EventType, type FilePickerOptions, type Message, type NotificationType, SDK_VERSION, type SessionContext, type Skill, type SkillResult, type SkillVariable, type StateUpdate, type StreamingContentEventData, type TabConfig, type ToolCall, type ToolExecuteHandler, type ToolExecutionEventData, type ToolInfo, type ToolParameter, type ToolResult, type Unsubscribe, type UserMessageEventData };
+export { type AiResponseEventData, Bridge, type ChatOptions, type ChatResponse, ChatableX, type ChatableXAI, type ChatableXEvents, type ChatableXInitConfig, type ChatableXPlatform, type ChatableXSDK, type ChatableXSkills, type ChatableXStorage, type ChatableXToolModule, type ChatableXTools, type ChatableXUI, type CloseEventData, type EventCallbackMap, type EventType, type FilePickerOptions, type Message, type NotificationType, SDK_VERSION, type SessionContext, type Skill, type SkillResult, type SkillVariable, type StateUpdate, type StreamingContentEventData, type TabConfig, type ToolCall, type ToolExecuteHandler, type ToolExecutionEventData, type ToolInfo, type ToolParameter, type ToolResult, type Unsubscribe, type UserMessageEventData };

@@ -1,199 +1,794 @@
-# chatablex-web-sdk
+# ChatableX Web SDK
 
 English | [**简体中文**](README.zh-CN.md)
 
-Runtime SDK for building **ChatableX AI App** WebUI applications.
+**Runtime SDK for building ChatableX AI App WebUI extensions.**
 
-Unlike a type-only package, this SDK contains the actual bridge runtime that connects your web app to the ChatableX Flutter host. You must install it as a dependency — the platform does **not** inject it for you.
+`chatablex-web-sdk` is the official JavaScript/TypeScript library that connects your web application to the **ChatableX desktop client** (Flutter WebView host). Unlike a type-only package, it ships the real bridge runtime — request/response RPC, event subscriptions, and tool execution callbacks.
 
-## Install
+Your WebUI runs inside a WebView. Many capabilities — native dialogs, file picking, session-aware storage, AI calls through the host pipeline — are awkward or inconsistent with browser-only APIs. This SDK exposes them as typed, promise-based modules.
+
+---
+
+## Table of Contents
+
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Project Setup](#project-setup)
+- [Architecture](#architecture)
+- [Core Concept: Tool Execution](#core-concept-tool-execution)
+- [API Reference](#api-reference)
+  - [ChatableX (entry)](#chatablex-entry)
+  - [sdk.tool](#sdktool)
+  - [sdk.events](#sdkevents)
+  - [sdk.ai](#sdkai)
+  - [sdk.ui](#sdkui)
+  - [sdk.storage](#sdkstorage)
+  - [sdk.tools](#sdktools)
+  - [sdk.skills](#sdkskills)
+  - [sdk.platform](#sdkplatform)
+- [Events Reference](#events-reference)
+- [Permissions](#permissions)
+- [Host Capability Matrix](#host-capability-matrix)
+- [Local Development](#local-development)
+- [Framework Integration](#framework-integration)
+- [TypeScript Types](#typescript-types)
+- [Best Practices](#best-practices)
+- [Troubleshooting](#troubleshooting)
+- [Versioning](#versioning)
+- [License](#license)
+
+---
+
+## Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **ChatableX client** | Desktop app with WebView bridge (Flutter host) |
+| **Extension mode** | `execution_mode: "webapp"` in `manifest.json` |
+| **Node.js** | ≥ 16 (for building your WebUI) |
+| **Build output** | `webui.entry` must point to `./dist/index.html` (Vite or equivalent) |
+| **SDK install** | You **must** `npm install chatablex-web-sdk` — the host does **not** inject the SDK |
+
+The platform consumes two things from your extension:
+
+1. **Built artifacts** at `chatablex.webapp.webui.entry` (typically `./dist/index.html`)
+2. **Bridge calls** via this SDK (`ChatableX.init`, `sdk.tool.onExecute`, etc.)
+
+---
+
+## Installation
 
 ```bash
 npm install chatablex-web-sdk
-# or link locally during development:
-npm install ../chatablex-web-sdk
 ```
+
+Local development against a monorepo copy:
+
+```bash
+npm install ../chatablex-web-sdk
+# or
+npm install file:../chatablex-web-sdk
+```
+
+**Package exports** (ESM + CJS + TypeScript declarations):
+
+```ts
+import { ChatableX } from 'chatablex-web-sdk';
+import type { ChatableXSDK, ToolResult, ChatResponse } from 'chatablex-web-sdk';
+```
+
+---
 
 ## Quick Start
 
-```tsx
+Minimal integration — handle LLM tool calls in your WebUI:
+
+```ts
 import { ChatableX } from 'chatablex-web-sdk';
 
-// Initialize — connects to the Flutter WebView host
-const sdk = await ChatableX.init({ appId: 'my-app', debug: true });
+async function main() {
+  const sdk = await ChatableX.init({
+    appId: 'my-counter-app',  // must match manifest.json "id"
+    debug: true,
+  });
 
-// Register a tool handler (called when the LLM invokes your tool)
-sdk.tool.onExecute(async (params) => {
-  const { action, value } = params;
-  // ... perform action, update UI ...
-  return { success: true, result: 42 };
-});
+  sdk.tool.onExecute(async (params) => {
+    const { action, value } = params;
+
+    if (action === 'increment') {
+      const next = (Number(value) || 0) + 1;
+      return { success: true, data: { value: next } };
+    }
+
+    return { success: false, error: `Unknown action: ${action}` };
+  });
+}
+
+main().catch(console.error);
 ```
 
-## What are the SDK namespaces for?
+**You do not need every module.** The smallest production integration is usually `sdk.tool` only. Add `sdk.storage`, `sdk.events`, `sdk.ui`, etc. when your product needs them.
 
-The object returned by `ChatableX.init()` is a **set of APIs grouped by responsibility**. Your WebUI runs inside a WebView; many capabilities (native dialogs, file picking, storage aligned with the main chat, AI calls through the host’s stack) are awkward or inconsistent if you only use browser APIs. These modules call into the **Flutter host via the JS bridge**.
+---
 
-**You do not need every module** for every app — the smallest integration is usually `sdk.tool` (handle LLM invocations). Add others when you need them.
+## Project Setup
 
+### manifest.json (webapp extension)
 
-| Namespace | Role (why it exists) |
-|-----------|----------------------|
-| **`sdk.tool`** | Register tool execution: when the LLM invokes your tool, the host forwards params into your WebUI and you return a result. This is the **core** hook for an AI App. |
-| **`sdk.events`** | Subscribe to host-side events (e.g. user messages, streaming) so the WebUI stays in sync with the session. |
-| **`sdk.ai`** | Send messages or read session context through the **same host AI pipeline** (`chat`, `getContext`, etc.) instead of wiring your own model only inside the page. |
-| **`sdk.ui`** | Drive **native host UI**: toasts, confirms, file picker, refresh main chrome — same UX and permissions as the desktop client. |
-| **`sdk.storage`** | Key–value storage on the **host** for persistence and sharing with the rest of the app, not only `localStorage` in the WebView. |
-| **`sdk.tools` / `sdk.skills`** | List or invoke other tools and skills on the platform for orchestration. |
-
-The **API** sections below each include: a **typical scenario** (when to use it) + **example code** (how to wire it up).
-
-## API
-
-### `ChatableX.init(config)`
-
-| Option    | Type    | Default | Description |
-|-----------|---------|---------|-------------|
-| `appId`   | string  | —       | **Required.** Must match your `manifest.json` `id`. |
-| `debug`   | boolean | false   | Print debug logs to console. |
-| `timeout` | number  | 10000   | Handshake timeout in ms. |
-
-Returns `Promise<ChatableXSDK>`.
-
-### `sdk.tool`
-
-**When to use**: The user opens your AI App from chat, or the model invokes your tool; the host forwards JSON params into the WebView and you return a result back into the session.
-
-```ts
-sdk.tool.onExecute(async (params) => {
-  const { action, rowId } = params as { action?: string; rowId?: string };
-  if (action === 'delete') {
-    await deleteRow(rowId);
-    return { success: true, message: 'Deleted' };
+```json
+{
+  "id": "my-counter-app",
+  "name": "Counter App",
+  "version": "1.0.0",
+  "type": "app",
+  "execution_mode": "webapp",
+  "return_direct": true,
+  "permissions": ["notification"],
+  "tools": [
+    {
+      "name": "counter_control",
+      "description": "Control the counter widget",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": { "type": "string", "enum": ["increment", "decrement", "get"] },
+          "value": { "type": "number" }
+        },
+        "required": ["action"]
+      }
+    }
+  ],
+  "chatablex": {
+    "webapp": {
+      "webui": {
+        "entry": "./dist/index.html"
+      }
+    }
   }
-  return { success: false, error: 'unknown action' };
-});
-
-// Metadata from manifest (filled in by the host after handshake)
-const info = sdk.tool.getInfo();
+}
 ```
 
-### `sdk.events`
+| Field | Rule |
+|-------|------|
+| `id` | Must equal `ChatableX.init({ appId })` |
+| `execution_mode` | Must be `"webapp"` |
+| `webui.entry` | Relative path → local HTTP serve; `https://` → remote URL |
+| `tools[]` | Declares LLM-callable functions; host forwards args to `sdk.tool.onExecute` |
+| `permissions` | Gates host-side APIs — see [Permissions](#permissions) |
 
-**When to use**: Your side panel should stay in sync with the main window—new user messages, streaming assistant output, or other tool executions should update your UI.
+### package.json scripts
 
-```ts
-const unsubUser = sdk.events.onUserMessage(({ message }) => {
-  appendActivityFeed(`User: ${message}`);
-});
-
-const unsubStream = sdk.events.on('streamingContent', ({ content, finished }) => {
-  setPartialReply(content);
-  if (finished) setLoading(false);
-});
-
-const unsubAi = sdk.events.onAiResponse((data) => {
-  setLastReply(data.content);
-});
-
-// Unsubscribe on unmount to avoid leaks
-// unsubUser(); unsubStream(); unsubAi();
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "chatablex-web-sdk": "^1.0.0"
+  }
+}
 ```
 
-You can also subscribe to `toolExecution`, `close`, etc. (depends on host support).
+Run `npm run build` before publishing. The ChatableX client loads `dist/index.html`, not your dev server (unless you configure a remote `webui.entry` URL).
 
-### `sdk.ai`
+### Recommended project layout
 
-**When to use**: A button in your panel like “ask about this session again” should use the **host’s** model and context, not a separate API key inside the page; or you need session metadata for a summary view.
-
-```ts
-const reply = await sdk.ai.chat('Summarize the last user message in three bullets', {
-  stream: false,
-});
-
-const ctx = await sdk.ai.getContext();
-if (ctx.name) setSessionTitle(ctx.name); // some fields depend on host implementation
-
-// Streaming may be pushed by the host; call chatStream when supported
-await sdk.ai.chatStream('Write a short reply', { stream: true });
+```
+my-app/
+├── manifest.json          # extension metadata
+├── package.json
+├── index.html             # Vite entry HTML
+├── src/
+│   ├── main.ts            # ChatableX.init() + app bootstrap
+│   ├── app.ts             # UI logic
+│   └── bridge.ts          # optional: tool routing helpers
+├── dist/                  # build output (consumed by host)
+│   └── index.html
+└── vite.config.ts
 ```
 
-### `sdk.ui`
-
-**When to use**: Destructive actions need a **native confirm**; long jobs end with a **host toast**; picking files should use the **host file picker**; after work you may **refresh the main transcript** or close the WebUI.
-
-```ts
-await sdk.ui.showNotification('Export finished', 'success');
-
-const ok = await sdk.ui.showConfirm('Delete record', 'This cannot be undone. Continue?');
-if (!ok) return;
-
-const path = await sdk.ui.pickFile({ type: 'image' });
-if (path) await uploadPreview(path);
-
-await sdk.ui.updateState({ refreshMessages: true });
-// await sdk.ui.openTab({ title: 'Details', type: 'custom', data: { id: 'x' } });
-```
-
-### `sdk.storage`
-
-**When to use**: Persist filters, layout, or drafts for your panel on the **host** so it behaves like the rest of the desktop app—not only `localStorage` inside the WebView.
-
-```ts
-const KEY = 'my-app:filters';
-
-await sdk.storage.set(KEY, { projectId: 'p1', sort: 'date' });
-const filters = await sdk.storage.get<{ projectId: string; sort: string }>(KEY);
-await sdk.storage.delete(KEY);
-```
-
-### `sdk.tools` / `sdk.skills`
-
-**When to use**: A one-click flow in your panel chains **other installed tools** in order; or you show a form so the user fills variables and runs a **skill** (a skill may orchestrate several tools). Use `executeWithConfirm` for risky steps so the host shows a confirm dialog first.
-
-```ts
-const tools = await sdk.tools.list();
-setToolPicker(tools.filter((t) => t.id !== sdk.tool.getInfo().id));
-
-const step1 = await sdk.tools.execute('fetch-doc', { url });
-if (!step1.success) throw new Error(step1.error);
-const step2 = await sdk.tools.execute('summarize', { text: step1.data });
-
-// High-risk actions: confirm in the host first
-await sdk.tools.executeWithConfirm('delete-backup', { id: backupId });
-
-const skills = await sdk.skills.list();
-const skillResult = await sdk.skills.execute('weekly-report-skill', {
-  week: '2026-W13',
-  department: 'sales',
-});
-```
+---
 
 ## Architecture
 
 ```
-Your App (React/Vue/Vanilla)
-    │  import { ChatableX } from 'chatablex-web-sdk'
-    │
-    ▼
-┌─────────────────────────────────────┐
-│  chatablex-web-sdk (this package)   │
-│                                     │
-│  Bridge layer:                      │
-│    JS → Flutter: ChatableXBridge    │
-│    Flutter → JS: ChatableXReceive   │
-│                                     │
-│  Modules: tool, events, ai, ui,    │
-│           storage, tools, skills    │
-└──────────────┬──────────────────────┘
-               │  WebView Bridge
-               ▼
-┌─────────────────────────────────────┐
-│  ChatableX Flutter Client           │
-│  (owns chat UI, SSE stream, agent)  │
-└─────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Your Web App (React / Vue / Svelte / Vanilla)               │
+│    import { ChatableX } from 'chatablex-web-sdk'             │
+└────────────────────────────┬─────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────┐
+│  chatablex-web-sdk                                           │
+│                                                              │
+│  Bridge (RPC + events)                                       │
+│    JS → Host : window.ChatableXBridge.postMessage(JSON)      │
+│    Host → JS : window.ChatableXReceive(JSON)                 │
+│                                                              │
+│  Modules: tool · events · ai · ui · storage · tools ·        │
+│           skills · platform                                  │
+└────────────────────────────┬─────────────────────────────────┘
+                             │  WebView JavaScriptChannel
+                             ▼
+┌──────────────────────────────────────────────────────────────┐
+│  ChatableX Flutter Client                                    │
+│    Chat UI · SSE stream · Agent graph · SQLite storage       │
+└──────────────────────────────────────────────────────────────┘
 ```
+
+### Bridge protocol
+
+**Request (JS → Flutter):**
+
+```json
+{
+  "id": "ctx_1_1718200000000",
+  "method": "storage.get",
+  "params": { "key": "filters" },
+  "timestamp": 1718200000000
+}
+```
+
+**Response (Flutter → JS):**
+
+```json
+{
+  "type": "response",
+  "id": "ctx_1_1718200000000",
+  "success": true,
+  "data": { "projectId": "p1" }
+}
+```
+
+**Event push (Flutter → JS):**
+
+```json
+{
+  "type": "event",
+  "eventType": "toolExecution",
+  "data": { "action": "increment", "_requestId": "texec_1_...", "_toolName": "counter_control" }
+}
+```
+
+**Tool result (JS → Flutter, fire-and-forget):**
+
+```json
+{
+  "method": "tool.executeResult",
+  "params": {
+    "_requestId": "texec_1_...",
+    "success": true,
+    "data": { "value": 42 }
+  }
+}
+```
+
+> `tool.executeResult` does **not** use the RPC `id` field. The host correlates results via `_requestId`. This is required because WebView `evaluateJavaScript` cannot await Promises.
+
+### Initialization sequence
+
+1. Your bundle loads in the WebView.
+2. You call `ChatableX.init({ appId })`.
+3. SDK installs `window.ChatableXReceive`.
+4. SDK waits for `window.ChatableXBridge` (set by Flutter).
+5. SDK sends `sdk_init` handshake → host responds with tool metadata.
+6. SDK exposes `window.ChatableX` and returns the `sdk` object.
+
+---
+
+## Core Concept: Tool Execution
+
+This is the **primary integration path** for AI Apps. When the LLM invokes your tool, the host forwards parameters into your WebUI and waits for a result.
+
+```
+LLM (Agent)          Flutter Host              Your WebUI (SDK)
+     │                     │                          │
+     │  frontend_tool_call │                          │
+     │────────────────────>│                          │
+     │                     │  event: toolExecution    │
+     │                     │  { ...args, _requestId } │
+     │                     │─────────────────────────>│
+     │                     │                          │ onExecute(params)
+     │                     │                          │  → your logic
+     │                     │  tool.executeResult      │
+     │                     │<─────────────────────────│
+     │  tool-result POST   │                          │
+     │<────────────────────│                          │
+     │  Agent continues    │                          │
+```
+
+### Handler contract
+
+```ts
+sdk.tool.onExecute(async (params) => {
+  // params includes LLM arguments PLUS host metadata:
+  //   _toolName  — which manifest tool was invoked (string)
+  //   _requestId — correlation id (string, set by host)
+
+  return {
+    success: true,           // required
+    data: { /* any */ },     // optional, returned to LLM
+    error: 'reason',         // optional, when success is false
+  };
+});
+```
+
+| Return field | Type | Description |
+|--------------|------|-------------|
+| `success` | `boolean` | Whether the operation succeeded |
+| `data` | `unknown` | Payload for the LLM / session (any JSON-serializable value) |
+| `error` | `string` | Human-readable error when `success: false` |
+
+**Rules:**
+
+- Register **one** handler via `onExecute`. Calling it again **replaces** the previous handler.
+- Handler exceptions are caught and converted to `{ success: false, error: message }`.
+- If no handler is registered, the host receives `{ success: false, error: 'No execute handler registered' }`.
+- Always route multi-tool apps by `params._toolName` (see `game-maker` reference below).
+- The host times out after **30 seconds** if no `tool.executeResult` arrives.
+
+### Multi-tool routing example
+
+```ts
+sdk.tool.onExecute(async (params) => {
+  const toolName = typeof params._toolName === 'string' ? params._toolName : '';
+
+  switch (toolName) {
+    case 'counter_control':
+      return handleCounter(params);
+    case 'export_data':
+      return handleExport(params);
+    default:
+      return { success: false, error: `Unknown tool: ${toolName}` };
+  }
+});
+```
+
+---
+
+## API Reference
+
+### ChatableX (entry)
+
+#### `ChatableX.init(config): Promise<ChatableXSDK>`
+
+Initialize the SDK and connect to the Flutter host.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `appId` | `string` | — | **Required.** Must match `manifest.json` `id`. |
+| `debug` | `boolean` | `false` | Log bridge activity to `console`. |
+| `timeout` | `number` | `10000` | Ms to wait for `ChatableXBridge` during handshake. |
+
+Returns a singleton. Subsequent `init()` calls return the same instance (first `appId` wins).
+
+Throws if `ChatableXBridge` is not available within `timeout`.
+
+#### `ChatableX.getInstance(): ChatableXSDK`
+
+Returns the current instance. Throws if `init()` has not been called.
+
+#### `ChatableX.isReady(): boolean`
+
+`true` after the first successful `init()`.
+
+#### `ChatableX.version: string`
+
+Current SDK version (e.g. `"1.0.0"`).
+
+---
+
+### `sdk.tool`
+
+Register and inspect your extension's tool execution handler.
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `onExecute` | `(handler) => void` | Register the LLM tool handler. **Required for webapp extensions.** |
+| `getInfo` | `() => ToolInfo` | Tool metadata from host handshake (`id`, `name`, `version`, `description`). |
+
+```ts
+const info = sdk.tool.getInfo();
+// { id: 'my-app', name: 'My App', version: '1.0.0', description: '...' }
+```
+
+---
+
+### `sdk.events`
+
+Subscribe to host-pushed events. Each subscription also sends `events.subscribe` to the host so it knows to forward matching events.
+
+| Method | Description |
+|--------|-------------|
+| `on(eventType, callback)` | Generic subscription. Returns `unsubscribe` function. |
+| `onAiResponse(callback)` | Shorthand for `'aiResponse'`. |
+| `onToolExecution(callback)` | Shorthand for `'toolExecution'`. |
+| `onUserMessage(callback)` | Shorthand for `'userMessage'`. |
+
+```ts
+const unsub = sdk.events.on('streamingContent', ({ content, finished }) => {
+  appendToken(content);
+  if (finished) setLoading(false);
+});
+
+// Clean up on component unmount
+unsub();
+```
+
+> **Note:** `unsubscribe()` removes the local listener only. The host is not notified via `events.unsubscribe` in the current SDK version.
+
+---
+
+### `sdk.ai`
+
+Call the host's AI pipeline from your WebUI. Requires `ai_chat` permission in `manifest.json`.
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `chat` | `(message, options?) => Promise<ChatResponse>` | Send a message through the host AI stack. |
+| `chatStream` | `(message, options?) => Promise<unknown>` | Initiate streaming chat. Tokens arrive via `sdk.events.on('streamingContent')`. |
+| `getContext` | `() => Promise<SessionContext>` | Fetch current session metadata and messages. |
+
+```ts
+const reply = await sdk.ai.chat('Summarize the last three messages', {
+  sessionId: 'optional-override',
+  stream: false,
+});
+
+const ctx = await sdk.ai.getContext();
+console.log(ctx.messages.length, ctx.activeTools);
+```
+
+**`ChatOptions`:** `sessionId`, `context`, `tools`, `skills`, `stream`.
+
+---
+
+### `sdk.ui`
+
+Drive native host UI from your WebUI.
+
+| Method | Signature | Permission | Description |
+|--------|-----------|------------|-------------|
+| `showNotification` | `(message, type?) => Promise<void>` | `notification` | Toast: `info` \| `success` \| `warning` \| `error`. |
+| `showConfirm` | `(title, message) => Promise<boolean>` | — | Native confirm dialog. Returns `true` if confirmed. |
+| `pickFile` | `(options?) => Promise<string \| null>` | `file_access` | Open native file picker. Returns path or `null` if cancelled. |
+| `openTab` | `(config) => Promise<void>` | — | Request a new tab in the host shell. |
+| `updateState` | `(state) => Promise<void>` | — | Notify host to refresh UI (e.g. `{ refreshMessages: true }`). |
+
+```ts
+const ok = await sdk.ui.showConfirm('Delete', 'This cannot be undone.');
+if (!ok) return;
+
+await sdk.ui.showNotification('Saved', 'success');
+await sdk.ui.updateState({ refreshMessages: true });
+```
+
+**`FilePickerOptions`:** `type` (`any` \| `image` \| `video` \| `audio` \| `custom`), `multiple`, `allowedExtensions`.
+
+**`TabConfig`:** `id`, `title`, `type` (`chat` \| `tool` \| `skill` \| `custom`), optional `icon`, `data`.
+
+> **Host-only:** `ui.saveFile` (native Save As dialog) is implemented in the Flutter host but not yet wrapped by this SDK. Advanced integrations can call it via raw `ChatableXBridge.postMessage`.
+
+---
+
+### `sdk.storage`
+
+Key-value storage persisted by the host (SQLite, scoped per tool). Use instead of `localStorage` when you need data to survive WebView resets and align with the desktop app.
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `get` | `<T>(key) => Promise<T \| null>` | Read a value. Returns `null` if missing. |
+| `set` | `<T>(key, value) => Promise<void>` | Write a JSON-serializable value. |
+| `delete` | `(key) => Promise<void>` | Remove a key. |
+
+```ts
+const KEY = 'my-app:draft';
+
+await sdk.storage.set(KEY, { title: 'Draft', nodes: [] });
+const draft = await sdk.storage.get<{ title: string }>(KEY);
+await sdk.storage.delete(KEY);
+```
+
+Storage keys are namespaced per tool instance on the host side.
+
+---
+
+### `sdk.tools`
+
+List and invoke **other** platform tools from your WebUI.
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `list` | `() => Promise<ToolInfo[]>` | List available tools. |
+| `execute` | `(toolId, params) => Promise<ToolResult>` | Invoke a tool immediately. |
+| `executeWithConfirm` | `(toolId, params) => Promise<ToolResult>` | Invoke after host confirmation dialog. |
+
+```ts
+const tools = await sdk.tools.list();
+const result = await sdk.tools.execute('fetch-doc', { url: 'https://...' });
+if (!result.success) throw new Error(result.error);
+```
+
+---
+
+### `sdk.skills`
+
+List and execute platform skills (orchestrated multi-tool workflows).
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `list` | `() => Promise<Skill[]>` | List installed skills. |
+| `execute` | `(skillId, variables) => Promise<SkillResult>` | Run a skill with input variables. |
+
+```ts
+const result = await sdk.skills.execute('weekly-report', {
+  week: '2026-W24',
+  department: 'engineering',
+});
+```
+
+> Skills declared via `execution_mode: "skill"` + `SKILL.md` are a separate manifest concept. `sdk.skills.execute` invokes skills through the host bridge at runtime.
+
+---
+
+### `sdk.platform`
+
+Platform-level utilities.
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `openInBrowser` | `(targetUrl) => Promise<void>` | Open URL in the system browser with auth handoff. |
+
+```ts
+await sdk.platform.openInBrowser('https://docs.example.com/guide');
+```
+
+Throws if `targetUrl` is empty or whitespace-only.
+
+---
+
+## Events Reference
+
+| Event | Payload | When fired |
+|-------|---------|------------|
+| `toolExecution` | `{ toolCall, result? }` or raw args + `_requestId` | LLM invokes a tool; also used internally for `onExecute` dispatch |
+| `aiResponse` | `ChatResponse` | AI reply completed in the host session |
+| `streamingContent` | `{ content, finished? }` | Token/chunk during streaming generation |
+| `userMessage` | `{ message, timestamp }` | User sent a message in the main chat |
+| `close` | `{ toolId }` | WebUI is about to close |
+
+Subscribe before the event fires. Use the returned `unsubscribe()` function in framework cleanup hooks (`useEffect` return, `onUnmounted`, etc.).
+
+---
+
+## Permissions
+
+Declare in `manifest.json` → `permissions[]`. The host rejects unauthorized API calls.
+
+| Manifest value | SDK APIs gated | Description |
+|----------------|----------------|-------------|
+| `ai_chat` | `sdk.ai.*` | Access host AI pipeline |
+| `file_access` | `sdk.ui.pickFile` | Native file picker |
+| `notification` | `sdk.ui.showNotification` | System toasts |
+| `network` | (host-level) | Network access for the extension |
+| `system_command` | (host-level) | Execute system commands |
+
+When denied, RPC calls reject with `Error: Permission denied: <permission>`.
+
+---
+
+## Host Capability Matrix
+
+SDK methods are thin RPC wrappers. Some host handlers are fully implemented; others return stubs. Plan your extension accordingly.
+
+| SDK method | Host status | Notes |
+|------------|-------------|-------|
+| `sdk.tool.onExecute` | **Production** | Core path — fully supported |
+| `sdk.storage.*` | **Production** | SQLite per tool |
+| `sdk.ui.showNotification` | **Production** | Requires `notification` |
+| `sdk.ui.showConfirm` | **Production** | |
+| `sdk.ui.pickFile` | **Production** | Requires `file_access` |
+| `sdk.ui.updateState` | **Production** | Delegates to host |
+| `sdk.platform.openInBrowser` | **Production** | Auth handoff |
+| `sdk.ai.chat` | **Production** | Requires `ai_chat` + delegate |
+| `sdk.ai.getContext` | **Partial** | Returns minimal context |
+| `sdk.ai.chatStream` | **Partial** | Returns `{ streaming: true }`; tokens via events |
+| `sdk.events.*` | **Production** | |
+| `sdk.tools.list` | **Stub** | Returns `[]` (host stub) |
+| `sdk.tools.execute` | **Delegate** | Requires host delegate |
+| `sdk.skills.list` | **Stub** | Returns `[]` (host stub) |
+| `sdk.skills.execute` | **Delegate** | Requires host delegate |
+| `sdk.ui.openTab` | **Stub** | Returns success, no action |
+| `ui.saveFile` (raw) | **Production** | Host only — not yet in SDK |
+
+---
+
+## Local Development
+
+Your WebUI should work in a normal browser for UI development. Detect the host and skip SDK initialization when absent.
+
+```ts
+function isInsideChatableX(): boolean {
+  return typeof window.ChatableXBridge === 'object' && window.ChatableXBridge !== null;
+}
+
+async function bootstrap() {
+  if (isInsideChatableX()) {
+    const sdk = await ChatableX.init({ appId: 'my-app', debug: true });
+    sdk.tool.onExecute(handleTool);
+  } else {
+    console.log('Running outside ChatableX — SDK inactive');
+    // Use mocks, local state, or manual test triggers
+  }
+
+  mountApp();
+}
+```
+
+**Tips:**
+
+- Use `npm run dev` (Vite) for fast iteration in the browser.
+- Use `npm run build` + load in ChatableX for integration testing.
+- The host serves `dist/` over `http://127.0.0.1:<port>/` for local extensions.
+- Set `debug: true` during development to see bridge logs.
+
+---
+
+## Framework Integration
+
+### React
+
+```tsx
+import { useEffect, useRef } from 'react';
+import { ChatableX, type ChatableXSDK } from 'chatablex-web-sdk';
+
+export function useChatableX(appId: string) {
+  const sdkRef = useRef<ChatableXSDK | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let unsubStream: (() => void) | undefined;
+
+    (async () => {
+      if (!window.ChatableXBridge) return;
+      const sdk = await ChatableX.init({ appId });
+      if (cancelled) return;
+      sdkRef.current = sdk;
+
+      sdk.tool.onExecute(async (params) => {
+        // handle tools
+        return { success: true };
+      });
+
+      unsubStream = sdk.events.on('streamingContent', (data) => {
+        // update state
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubStream?.();
+    };
+  }, [appId]);
+
+  return sdkRef;
+}
+```
+
+### Vue 3
+
+```ts
+import { onMounted, onUnmounted, shallowRef } from 'vue';
+import { ChatableX, type ChatableXSDK } from 'chatablex-web-sdk';
+
+export function useChatableX(appId: string) {
+  const sdk = shallowRef<ChatableXSDK | null>(null);
+  let unsub: (() => void) | undefined;
+
+  onMounted(async () => {
+    if (!window.ChatableXBridge) return;
+    sdk.value = await ChatableX.init({ appId });
+    sdk.value.tool.onExecute(handleTool);
+    unsub = sdk.value.events.onAiResponse(handleAiResponse);
+  });
+
+  onUnmounted(() => unsub?.());
+
+  return { sdk };
+}
+```
+
+---
+
+## TypeScript Types
+
+All public types are exported:
+
+```ts
+import type {
+  ChatableXSDK,
+  ChatableXInitConfig,
+  ToolInfo,
+  ToolResult,
+  ToolExecuteHandler,
+  ChatResponse,
+  ChatOptions,
+  SessionContext,
+  EventType,
+  EventCallbackMap,
+  NotificationType,
+  FilePickerOptions,
+  TabConfig,
+  StateUpdate,
+  Skill,
+  SkillResult,
+  Unsubscribe,
+} from 'chatablex-web-sdk';
+```
+
+Global `window` augmentation (after init):
+
+| Global | Set by | Purpose |
+|--------|--------|---------|
+| `window.ChatableX` | SDK | Live `ChatableXSDK` instance |
+| `window.ChatableXReceive` | SDK | Host → JS message receiver |
+| `window.ChatableXBridge` | Flutter | JS → Host `postMessage` channel |
+| `window.__CHATABLEX_DISPATCH__` | SDK | Direct tool dispatch (advanced) |
+
+---
+
+## Best Practices
+
+1. **Always call `init()` once** at app bootstrap, before registering handlers.
+2. **Match `appId` to manifest `id`** — mismatches cause subtle storage and routing bugs.
+3. **Route by `_toolName`** when your extension declares multiple `tools[]` entries.
+4. **Return structured `data`** — the LLM reads tool results in the session context.
+5. **Use `sdk.storage` for persistence** — not `localStorage`, if you need host-aligned state.
+6. **Unsubscribe events** on teardown to avoid duplicate handlers in SPA navigation.
+7. **Guard with `isInsideChatableX()`** so `npm run dev` works without the desktop client.
+8. **Build before publish** — the host loads `dist/`, not TypeScript source.
+9. **Declare permissions upfront** — don't call gated APIs without manifest entries.
+10. **Keep handlers fast** — the host enforces a 30s timeout on tool execution.
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| `ChatableXBridge not available` | Page loaded outside ChatableX, or init ran before channel registered | Guard with `isInsideChatableX()`; call `init()` after DOM ready |
+| `ChatableX SDK not initialised` | `getInstance()` before `init()` | Await `init()` first |
+| Tool call hangs 30s then fails | `onExecute` not registered, or no `tool.executeResult` sent | Ensure `init()` completed and handler is set |
+| `Permission denied` | Missing manifest permission | Add `ai_chat`, `file_access`, or `notification` |
+| `sdk_init handshake failed` | Host bridge not ready (non-fatal) | SDK continues with default metadata; check `debug: true` logs |
+| Storage returns `null` | First read or wrong key | Normal on first access; verify key spelling |
+| Works in dev, blank in ChatableX | Forgot to build, or wrong `webui.entry` | Run `npm run build`; verify `dist/index.html` exists |
+| Second `init()` ignored | Singleton by design | Restart WebView to re-init with a different `appId` |
+
+**Debug checklist:**
+
+```ts
+await ChatableX.init({ appId: 'my-app', debug: true });
+console.log('SDK ready:', ChatableX.isReady());
+console.log('Tool info:', ChatableX.getInstance().tool.getInfo());
+```
+
+---
+
+## Versioning
+
+| SDK version | npm tag | Notes |
+|-------------|---------|-------|
+| `1.0.0` | `latest` | Current stable |
+
+Breaking changes to bridge method names or `tool.executeResult` shape will trigger a major version bump. The Flutter host in each ChatableX client release is the canonical contract owner.
+
+---
 
 ## License
 
-MIT
+MIT © ChatableX Team

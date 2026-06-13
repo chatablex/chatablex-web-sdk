@@ -242,6 +242,11 @@ export interface ChatableXToolModule {
   onExecute(handler: ToolExecuteHandler): void;
 }
 
+export interface ChatableXPlatform {
+  /** Open URL in system browser with auth handoff (WebView only; implemented by Flutter host). */
+  openInBrowser(targetUrl: string): Promise<void>;
+}
+
 export interface ChatableXSDK {
   ai: ChatableXAI;
   tools: ChatableXTools;
@@ -250,6 +255,7 @@ export interface ChatableXSDK {
   events: ChatableXEvents;
   storage: ChatableXStorage;
   tool: ChatableXToolModule;
+  platform: ChatableXPlatform;
 }
 
 // ---------------------------------------------------------------------------

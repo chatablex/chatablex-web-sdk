@@ -270,6 +270,19 @@ function createSkillsModule(bridge) {
   };
 }
 
+// src/modules/platform.ts
+function createPlatformModule(bridge) {
+  return {
+    async openInBrowser(targetUrl) {
+      const url = typeof targetUrl === "string" ? targetUrl.trim() : "";
+      if (!url) {
+        throw new Error("openInBrowser: targetUrl is required");
+      }
+      await bridge.sendMessage("host.openInBrowser", { url });
+    }
+  };
+}
+
 // src/index.ts
 var SDK_VERSION = "1.0.0";
 var _instance = null;
@@ -311,7 +324,8 @@ var ChatableX = {
       ui: createUIModule(bridge),
       events: createEventsModule(bridge),
       storage: createStorageModule(bridge),
-      tool: toolModule
+      tool: toolModule,
+      platform: createPlatformModule(bridge)
     };
     window.ChatableX = sdk;
     _instance = sdk;
