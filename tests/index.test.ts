@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import pkg from '../package.json';
 import { createMockHost, DEFAULT_SDK_INIT_RESPONSE } from './helpers/mockHost';
 
 describe('ChatableX.init', () => {
@@ -99,6 +100,6 @@ describe('ChatableX.init', () => {
   it('exposes SDK_VERSION via ChatableX.version', async () => {
     const { ChatableX, SDK_VERSION } = await importSdk();
     expect(ChatableX.version).toBe(SDK_VERSION);
-    expect(SDK_VERSION).toBe('1.0.0');
+    expect(SDK_VERSION).toBe(pkg.version);
   });
 });

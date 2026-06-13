@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Sync release version from git tag into package.json and SDK_VERSION.
+ * Sync release version from git tag into package.json (and package-lock.json).
+ * SDK_VERSION is derived from package.json at build/runtime — no source patch needed.
  *
  * Usage:
  *   node scripts/sync-version.mjs 1.2.3
@@ -21,19 +22,27 @@ if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
   process.exit(1);
 }
 
+function writeJson(filePath, data) {
+  fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`);
+}
+
 const pkgPath = path.join(root, 'package.json');
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 pkg.version = version;
-fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+writeJson(pkgPath, pkg);
 
-const indexPath = path.join(root, 'src/index.ts');
-let indexSrc = fs.readFileSync(indexPath, 'utf8');
-indexSrc = indexSrc.replace(
-  /export const SDK_VERSION = '[^']*';/,
-  `export const SDK_VERSION = '${version}';`,
-);
-fs.writeFileSync(indexPath, indexSrc);
+const lockPath = path.join(root, 'package-lock.json');
+if (fs.existsSync(lockPath)) {
+  const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+  lock.version = version;
+  if (lock.packages?.['']) {
+    lock.packages[''].version = version;
+  }
+  writeJson(lockPath, lock);
+}
 
 console.log(`Synced version → ${version}`);
 console.log('  package.json');
-console.log('  src/index.ts (SDK_VERSION)');
+if (fs.existsSync(lockPath)) {
+  console.log('  package-lock.json');
+}

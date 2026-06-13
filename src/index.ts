@@ -27,8 +27,9 @@ import { createStorageModule } from './modules/storage';
 import { createToolsModule } from './modules/tools';
 import { createPlatformModule } from './modules/platform';
 import type { ChatableXSDK, ChatableXInitConfig, ToolInfo } from './types';
+import pkg from '../package.json';
 
-export const SDK_VERSION = '1.0.0';
+export const SDK_VERSION = pkg.version;
 
 let _instance: ChatableXSDK | null = null;
 
