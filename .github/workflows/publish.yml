@@ -1,12 +1,12 @@
 # Tag push → test → sync version from tag → build → publish to npm.
 #
-# Prerequisites (GitHub repo secrets):
-#   NPM_TOKEN — npm Access Token (Automation) from the `chatablex` npm account
-#               that owns https://www.npmjs.com/package/chatablex-web-sdk
+# Publishing uses npm Trusted Publishing (OIDC) — no NPM_TOKEN required.
 #
-# Setup:
-#   1. https://www.npmjs.com → Access Tokens → Generate New Token → Automation
-#   2. GitHub → Settings → Secrets and variables → Actions → NPM_TOKEN
+# Prerequisites (npmjs.com):
+#   chatablex-web-sdk → Settings → Trusted publishing → GitHub Actions
+#     Repository:        chatablex/chatablex-web-sdk
+#     Workflow filename: publish.yml
+#     Environment name:  (leave empty unless workflow sets `environment:`)
 #
 # Usage:
 #   git tag v1.0.1 && git push origin v1.0.1
@@ -20,6 +20,7 @@ on:
       - 'v*.*.*-*'
 
 permissions:
+  id-token: write # required for npm Trusted Publishing (OIDC)
   contents: read
 
 defaults:
@@ -39,13 +40,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies
         run: |
           echo "=== npm ci ==="
           npm ci
+          echo "=== npm version (Trusted Publishing requires npm >= 11.5.1) ==="
+          npm --version
           echo "=== installed packages ==="
           npm ls --depth=0 || true
 
@@ -103,65 +106,20 @@ jobs:
             console.log('artifact verification passed');
           "
 
-      - name: Validate NPM_TOKEN and diagnose npm auth
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          echo "=== validate NPM_TOKEN ==="
-          if [ -z "$NPM_TOKEN" ]; then
-            echo "::error::NPM_TOKEN secret is missing. Add it at GitHub → Settings → Secrets → Actions"
-            exit 1
-          fi
-          echo "NPM_TOKEN is set (length: ${#NPM_TOKEN})"
-
-          echo "=== configure .npmrc for auth test ==="
-          NPMRC_PATH="${RUNNER_TEMP}/.npmrc"
-          echo "registry=https://registry.npmjs.org/" > "$NPMRC_PATH"
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> "$NPMRC_PATH"
-          export NPM_CONFIG_USERCONFIG="$NPMRC_PATH"
-
-          echo "=== npm whoami (which account owns this token?) ==="
-          if ! NPM_USER="$(npm whoami 2>&1)"; then
-            echo "::error::npm whoami failed — token is invalid or expired"
-            echo "$NPM_USER"
-            exit 1
-          fi
-          echo "Authenticated as: $NPM_USER"
-
-          echo "=== npm owner ls chatablex-web-sdk ==="
-          npm owner ls chatablex-web-sdk 2>&1 || echo "::warning::could not list owners (package may not exist yet)"
-
-          echo "=== npm view chatablex-web-sdk ==="
-          npm view chatablex-web-sdk version 2>&1 || echo "package not found on npm (first publish?)"
-
-          if npm view chatablex-web-sdk name &>/dev/null; then
-            if npm owner ls chatablex-web-sdk 2>/dev/null | grep -q "$NPM_USER"; then
-              echo "Maintainer check passed for $NPM_USER"
-            else
-              echo "::error::npm user '$NPM_USER' is NOT a maintainer of chatablex-web-sdk."
-              echo "::error::Use a token from the 'chatablex' npm account, or run: npm owner add $NPM_USER chatablex-web-sdk"
-              exit 1
-            fi
-          else
-            echo "Package not on npm yet — first publish, skipping maintainer check"
-          fi
-
-      - name: Configure npm registry auth
+      - name: Configure npm registry for Trusted Publishing
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: https://registry.npmjs.org
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          echo "=== npm publish --access public (verbose) ==="
+          echo "=== npm publish via Trusted Publishing (OIDC) ==="
+          echo "repository: $(node -p "require('./package.json').repository.url")"
           echo "package: $(node -p "require('./package.json').name")"
           echo "version: $(node -p "require('./package.json').version")"
-          echo "npm whoami: $(npm whoami 2>&1 || echo 'FAILED')"
+          echo "workflow: ${GITHUB_WORKFLOW}"
+          echo "ref: ${GITHUB_REF}"
 
           set +e
           npm publish --access public --loglevel verbose 2>&1 | tee /tmp/npm-publish.log
@@ -184,16 +142,16 @@ jobs:
               echo "(no npm debug logs found)"
             fi
             echo ""
-            echo "=== common causes ==="
-            if grep -q "E404" /tmp/npm-publish.log; then
-              echo "::error::E404 usually means: token user lacks publish permission on this package."
-              echo "::error::Package owner is 'chatablex'. Token must be from that account or be added as maintainer."
-            fi
+            echo "=== common causes (Trusted Publishing) ==="
             if grep -q "ENEEDAUTH" /tmp/npm-publish.log; then
-              echo "::error::ENEEDAUTH: NPM_TOKEN is missing or invalid."
+              echo "::error::ENEEDAUTH: check npm Trusted Publisher settings:"
+              echo "::error::  Repository must be chatablex/chatablex-web-sdk"
+              echo "::error::  Workflow filename must be publish.yml (exact match)"
+              echo "::error::  Workflow must have permissions.id-token: write"
+              echo "::error::  package.json repository.url must match this GitHub repo"
             fi
             if grep -q "E403" /tmp/npm-publish.log; then
-              echo "::error::E403: forbidden — check token permissions and 2FA settings."
+              echo "::error::E403: trusted publisher config may not allow this workflow/environment."
             fi
             exit "$PUBLISH_EXIT"
           fi
