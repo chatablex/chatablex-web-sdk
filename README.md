@@ -1,5 +1,11 @@
 # ChatableX Web SDK
 
+[![license](https://img.shields.io/npm/l/chatablex-web-sdk.svg?style=flat-square)](https://github.com/chatablex/chatablex-web-sdk/blob/main/package.json)
+[![npm version](https://img.shields.io/npm/v/chatablex-web-sdk.svg?style=flat-square)](https://www.npmjs.com/package/chatablex-web-sdk)
+[![CI](https://img.shields.io/github/actions/workflow/status/chatablex/chatablex-web-sdk/ci.yml?branch=main&label=Build%20%26%20Test&logo=github)](https://github.com/chatablex/chatablex-web-sdk/actions/workflows/ci.yml)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/chatablex/chatablex-web-sdk/pulls)
+
 English | [**简体中文**](README.zh-CN.md)
 
 **Runtime SDK for building ChatableX AI App WebUI extensions.**
