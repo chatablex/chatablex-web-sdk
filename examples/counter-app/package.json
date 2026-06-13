@@ -1,0 +1,64 @@
+{
+  "name": "@chatablex/example-counter-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "ChatableX Web SDK 示例：React 计数器（先 get 再改）",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "chatablex-web-sdk": "file:../..",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^26.0.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.4.11",
+    "vitest": "^3.0.0"
+  },
+  "chatablex": {
+    "id": "counter-app",
+    "displayName": "Counter App",
+    "description": "简单计数器示例。LLM 应先调用 counter_control(action=get) 查看当前值，再执行加减或设值。",
+    "type": "app",
+    "execution_mode": "webapp",
+    "return_direct": true,
+    "webapp": {
+      "webui": {
+        "entry": "./dist/index.html",
+        "default_width": 420,
+        "default_height": 520
+      }
+    },
+    "tools": [
+      {
+        "name": "counter_control",
+        "description": "控制计数器数值。【重要】修改前必须先调用 action=get 查看当前值，再执行 increment/decrement/reset/set，避免多轮对话中数值不同步。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["get", "increment", "decrement", "reset", "set"],
+              "description": "get=查看当前计数（修改前必调）；increment=加1；decrement=减1；reset=归零；set=设为 value"
+            },
+            "value": {
+              "type": "number",
+              "description": "仅 action=set 时必填，目标数值"
+            }
+          },
+          "required": ["action"]
+        }
+      }
+    ]
+  }
+}

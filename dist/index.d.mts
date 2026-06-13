@@ -66,31 +66,6 @@ interface ToolResult {
     duration?: number;
 }
 type ToolExecuteHandler = (params: Record<string, unknown>) => Promise<Record<string, unknown>>;
-interface Skill {
-    id: string;
-    name: string;
-    description: string;
-    version: string;
-    author?: string;
-    category?: string;
-    toolIds: string[];
-    variables: SkillVariable[];
-    installed: boolean;
-}
-interface SkillVariable {
-    name: string;
-    type: string;
-    description: string;
-    required: boolean;
-    default?: unknown;
-}
-interface SkillResult {
-    success: boolean;
-    data?: unknown;
-    error?: string;
-    skillId: string;
-    toolResults?: ToolResult[];
-}
 type NotificationType = 'info' | 'success' | 'warning' | 'error';
 interface FilePickerOptions {
     type?: 'any' | 'image' | 'video' | 'audio' | 'custom';
@@ -155,10 +130,6 @@ interface ChatableXTools {
     execute(toolId: string, params: Record<string, unknown>): Promise<ToolResult>;
     executeWithConfirm(toolId: string, params: Record<string, unknown>): Promise<ToolResult>;
 }
-interface ChatableXSkills {
-    list(): Promise<Skill[]>;
-    execute(skillId: string, variables: Record<string, unknown>): Promise<SkillResult>;
-}
 interface ChatableXUI {
     showNotification(message: string, type?: NotificationType): Promise<void>;
     showConfirm(title: string, message: string): Promise<boolean>;
@@ -188,7 +159,6 @@ interface ChatableXPlatform {
 interface ChatableXSDK {
     ai: ChatableXAI;
     tools: ChatableXTools;
-    skills: ChatableXSkills;
     ui: ChatableXUI;
     events: ChatableXEvents;
     storage: ChatableXStorage;
@@ -229,7 +199,7 @@ declare class Bridge {
     /** Wait for ChatableXBridge (set by Flutter) to become available. */
     waitForBridge(timeoutMs: number): Promise<void>;
     /** Send a request to Flutter and wait for a response. */
-    sendMessage(method: string, params?: Record<string, unknown>, requestTimeoutMs?: number): Promise<unknown>;
+    sendMessage(method: string, params?: object, requestTimeoutMs?: number): Promise<unknown>;
     private _handleResponse;
     private _handleEvent;
     addEventListener(eventType: string, handler: EventHandler): () => void;
@@ -282,4 +252,4 @@ declare const ChatableX: {
     version: string;
 };
 
-export { type AiResponseEventData, Bridge, type ChatOptions, type ChatResponse, ChatableX, type ChatableXAI, type ChatableXEvents, type ChatableXInitConfig, type ChatableXPlatform, type ChatableXSDK, type ChatableXSkills, type ChatableXStorage, type ChatableXToolModule, type ChatableXTools, type ChatableXUI, type CloseEventData, type EventCallbackMap, type EventType, type FilePickerOptions, type Message, type NotificationType, SDK_VERSION, type SessionContext, type Skill, type SkillResult, type SkillVariable, type StateUpdate, type StreamingContentEventData, type TabConfig, type ToolCall, type ToolExecuteHandler, type ToolExecutionEventData, type ToolInfo, type ToolParameter, type ToolResult, type Unsubscribe, type UserMessageEventData };
+export { type AiResponseEventData, Bridge, type ChatOptions, type ChatResponse, ChatableX, type ChatableXAI, type ChatableXEvents, type ChatableXInitConfig, type ChatableXPlatform, type ChatableXSDK, type ChatableXStorage, type ChatableXToolModule, type ChatableXTools, type ChatableXUI, type CloseEventData, type EventCallbackMap, type EventType, type FilePickerOptions, type Message, type NotificationType, SDK_VERSION, type SessionContext, type StateUpdate, type StreamingContentEventData, type TabConfig, type ToolCall, type ToolExecuteHandler, type ToolExecutionEventData, type ToolInfo, type ToolParameter, type ToolResult, type Unsubscribe, type UserMessageEventData };

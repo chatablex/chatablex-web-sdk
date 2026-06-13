@@ -25,7 +25,6 @@ import { createAIModule } from './modules/ai';
 import { createUIModule } from './modules/ui';
 import { createStorageModule } from './modules/storage';
 import { createToolsModule } from './modules/tools';
-import { createSkillsModule } from './modules/skills';
 import { createPlatformModule } from './modules/platform';
 import type { ChatableXSDK, ChatableXInitConfig, ToolInfo } from './types';
 
@@ -81,7 +80,6 @@ export const ChatableX = {
     const sdk: ChatableXSDK = {
       ai: createAIModule(bridge),
       tools: createToolsModule(bridge),
-      skills: createSkillsModule(bridge),
       ui: createUIModule(bridge),
       events: createEventsModule(bridge),
       storage: createStorageModule(bridge),

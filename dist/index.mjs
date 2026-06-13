@@ -258,18 +258,6 @@ function createToolsModule(bridge) {
   };
 }
 
-// src/modules/skills.ts
-function createSkillsModule(bridge) {
-  return {
-    list() {
-      return bridge.sendMessage("skills.list", {});
-    },
-    execute(skillId, variables) {
-      return bridge.sendMessage("skills.execute", { skillId, variables });
-    }
-  };
-}
-
 // src/modules/platform.ts
 function createPlatformModule(bridge) {
   return {
@@ -320,7 +308,6 @@ var ChatableX = {
     const sdk = {
       ai: createAIModule(bridge),
       tools: createToolsModule(bridge),
-      skills: createSkillsModule(bridge),
       ui: createUIModule(bridge),
       events: createEventsModule(bridge),
       storage: createStorageModule(bridge),

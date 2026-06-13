@@ -1,0 +1,70 @@
+# Tag push → sync version from tag → test → build → publish to npm.
+#
+# Prerequisites (GitHub repo secrets):
+#   NPM_TOKEN — npm access token with publish permission for chatablex-web-sdk
+#
+# Usage:
+#   git tag v1.0.1
+#   git push origin v1.0.1
+
+name: Publish npm
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Test, build & publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing chatablex-web-sdk@${VERSION} (tag ${TAG})"
+
+      - name: Sync package.json & SDK_VERSION
+        run: node scripts/sync-version.mjs "${{ steps.version.outputs.version }}"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify published files
+        run: |
+          test -f dist/index.js
+          test -f dist/index.mjs
+          test -f dist/index.d.ts
+          node -e "const p=require('./package.json'); if(p.version!=='${{ steps.version.outputs.version }}') process.exit(1)"
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

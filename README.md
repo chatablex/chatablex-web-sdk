@@ -26,7 +26,6 @@ Your WebUI runs inside a WebView. Many capabilities — native dialogs, file pic
   - [sdk.ui](#sdkui)
   - [sdk.storage](#sdkstorage)
   - [sdk.tools](#sdktools)
-  - [sdk.skills](#sdkskills)
   - [sdk.platform](#sdkplatform)
 - [Events Reference](#events-reference)
 - [Permissions](#permissions)
@@ -36,6 +35,7 @@ Your WebUI runs inside a WebView. Many capabilities — native dialogs, file pic
 - [TypeScript Types](#typescript-types)
 - [Best Practices](#best-practices)
 - [Troubleshooting](#troubleshooting)
+- [Examples](#examples)
 - [Versioning](#versioning)
 - [License](#license)
 
@@ -210,7 +210,7 @@ my-app/
 │    Host → JS : window.ChatableXReceive(JSON)                 │
 │                                                              │
 │  Modules: tool · events · ai · ui · storage · tools ·        │
-│           skills · platform                                  │
+│           tools · platform                                   │
 └────────────────────────────┬─────────────────────────────────┘
                              │  WebView JavaScriptChannel
                              ▼
@@ -513,25 +513,7 @@ const result = await sdk.tools.execute('fetch-doc', { url: 'https://...' });
 if (!result.success) throw new Error(result.error);
 ```
 
----
-
-### `sdk.skills`
-
-List and execute platform skills (orchestrated multi-tool workflows).
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `list` | `() => Promise<Skill[]>` | List installed skills. |
-| `execute` | `(skillId, variables) => Promise<SkillResult>` | Run a skill with input variables. |
-
-```ts
-const result = await sdk.skills.execute('weekly-report', {
-  week: '2026-W24',
-  department: 'engineering',
-});
-```
-
-> Skills declared via `execution_mode: "skill"` + `SKILL.md` are a separate manifest concept. `sdk.skills.execute` invokes skills through the host bridge at runtime.
+> Skill-type extensions (`execution_mode: "skill"`) are activated in the chat session and injected into the system prompt — not executed via a separate SDK module. Use `sdk.tools` if your WebUI needs to orchestrate other extensions.
 
 ---
 
@@ -600,8 +582,6 @@ SDK methods are thin RPC wrappers. Some host handlers are fully implemented; oth
 | `sdk.events.*` | **Production** | |
 | `sdk.tools.list` | **Stub** | Returns `[]` (host stub) |
 | `sdk.tools.execute` | **Delegate** | Requires host delegate |
-| `sdk.skills.list` | **Stub** | Returns `[]` (host stub) |
-| `sdk.skills.execute` | **Delegate** | Requires host delegate |
 | `sdk.ui.openTab` | **Stub** | Returns success, no action |
 | `ui.saveFile` (raw) | **Production** | Host only — not yet in SDK |
 
@@ -724,8 +704,6 @@ import type {
   FilePickerOptions,
   TabConfig,
   StateUpdate,
-  Skill,
-  SkillResult,
   Unsubscribe,
 } from 'chatablex-web-sdk';
 ```
@@ -776,6 +754,24 @@ await ChatableX.init({ appId: 'my-app', debug: true });
 console.log('SDK ready:', ChatableX.isReady());
 console.log('Tool info:', ChatableX.getInstance().tool.getInfo());
 ```
+
+---
+
+## Examples
+
+Official sample apps under [`examples/`](examples/). Each includes unit tests + bridge integration tests + `dist/` build output.
+
+| App | Framework | Tool | Demo flow |
+|-----|-----------|------|-----------|
+| [counter-app](examples/counter-app/) | React | `counter_control` | `get` → `increment` → `get` |
+| [todo-app](examples/todo-app/) | Vue 3 | `todo_control` | `get` → `add` → `get` (uses `sdk.storage`) |
+
+```bash
+npm run test:examples    # run all example tests
+npm run build:examples   # build both dist/
+```
+
+Both tools expose a **`get` action** so the LLM reads real state before mutating — critical for reliable multi-turn demos.
 
 ---
 

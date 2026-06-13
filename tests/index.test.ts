@@ -30,7 +30,6 @@ describe('ChatableX.init', () => {
 
     expect(sdk.ai).toBeDefined();
     expect(sdk.tools).toBeDefined();
-    expect(sdk.skills).toBeDefined();
     expect(sdk.ui).toBeDefined();
     expect(sdk.events).toBeDefined();
     expect(sdk.storage).toBeDefined();

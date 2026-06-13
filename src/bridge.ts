@@ -70,7 +70,7 @@ export class Bridge {
   // -------------------------------------------------------------------------
 
   /** Send a request to Flutter and wait for a response. */
-  sendMessage(method: string, params: Record<string, unknown> = {}, requestTimeoutMs = 30_000): Promise<unknown> {
+  sendMessage(method: string, params: object = {}, requestTimeoutMs = 30_000): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const id = this._nextId();
       const message = { id, method, params, timestamp: Date.now() };

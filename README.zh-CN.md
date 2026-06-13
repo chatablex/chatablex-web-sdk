@@ -26,7 +26,6 @@
   - [sdk.ui](#sdkui)
   - [sdk.storage](#sdkstorage)
   - [sdk.tools](#sdktools)
-  - [sdk.skills](#sdkskills)
   - [sdk.platform](#sdkplatform)
 - [事件参考](#事件参考)
 - [权限声明](#权限声明)
@@ -36,6 +35,7 @@
 - [TypeScript 类型](#typescript-类型)
 - [最佳实践](#最佳实践)
 - [故障排查](#故障排查)
+- [官方示例](#官方示例)
 - [版本说明](#版本说明)
 - [许可证](#许可证)
 
@@ -210,7 +210,7 @@ my-app/
 │    宿主 → JS : window.ChatableXReceive(JSON)                 │
 │                                                              │
 │  模块：tool · events · ai · ui · storage · tools ·           │
-│        skills · platform                                     │
+│        tools · platform                                      │
 └────────────────────────────┬─────────────────────────────────┘
                              │  WebView JavaScriptChannel
                              ▼
@@ -513,25 +513,7 @@ const result = await sdk.tools.execute('fetch-doc', { url: 'https://...' });
 if (!result.success) throw new Error(result.error);
 ```
 
----
-
-### `sdk.skills`
-
-列举并执行平台技能（编排多个工具的工作流）。
-
-| 方法 | 签名 | 说明 |
-|------|------|------|
-| `list` | `() => Promise<Skill[]>` | 列出已安装技能。 |
-| `execute` | `(skillId, variables) => Promise<SkillResult>` | 以输入变量运行技能。 |
-
-```ts
-const result = await sdk.skills.execute('weekly-report', {
-  week: '2026-W24',
-  department: 'engineering',
-});
-```
-
-> 通过 `execution_mode: "skill"` + `SKILL.md` 声明的技能是独立的 manifest 概念。`sdk.skills.execute` 是在运行时通过宿主桥接调用技能。
+> 指令型扩展（`execution_mode: "skill"`）通过在对话中激活并注入系统提示词使用，不再有单独的 SDK 模块。若 WebUI 需编排其他扩展，请用 `sdk.tools`。
 
 ---
 
@@ -600,8 +582,6 @@ SDK 方法是薄 RPC 封装。部分宿主处理器已完整实现，部分返�
 | `sdk.events.*` | **生产可用** | |
 | `sdk.tools.list` | **Stub** | 返回 `[]` |
 | `sdk.tools.execute` | **Delegate** | 需要宿主 delegate |
-| `sdk.skills.list` | **Stub** | 返回 `[]` |
-| `sdk.skills.execute` | **Delegate** | 需要宿主 delegate |
 | `sdk.ui.openTab` | **Stub** | 返回成功，无实际操作 |
 | `ui.saveFile`（原始调用） | **生产可用** | 仅宿主——尚未封装到 SDK |
 
@@ -724,8 +704,6 @@ import type {
   FilePickerOptions,
   TabConfig,
   StateUpdate,
-  Skill,
-  SkillResult,
   Unsubscribe,
 } from 'chatablex-web-sdk';
 ```
@@ -776,6 +754,24 @@ await ChatableX.init({ appId: 'my-app', debug: true });
 console.log('SDK ready:', ChatableX.isReady());
 console.log('Tool info:', ChatableX.getInstance().tool.getInfo());
 ```
+
+---
+
+## 官方示例
+
+[`examples/`](examples/) 目录下的可运行示例。每个示例均含单元测试、桥接集成测试，以及可装入 ChatableX 的 `dist/` 构建产物。
+
+| 应用 | 框架 | 工具 | 演示流程 |
+|------|------|------|----------|
+| [counter-app](examples/counter-app/) | React | `counter_control` | `get` → `increment` → `get` |
+| [todo-app](examples/todo-app/) | Vue 3 | `todo_control` | `get` → `add` → `get`（`sdk.storage` 持久化） |
+
+```bash
+npm run test:examples    # 运行全部示例测试
+npm run build:examples   # 构建两个 dist/
+```
+
+两个工具均提供 **`get` action**，要求 LLM 在修改前先读取真实状态——多轮对话演示时避免幻觉和工具漏调。
 
 ---
 

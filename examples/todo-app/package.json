@@ -1,0 +1,67 @@
+{
+  "name": "@chatablex/example-todo-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "ChatableX Web SDK 示例：Vue 待办清单（先 get 再改，sdk.storage 持久化）",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "vue-tsc -b --noEmit"
+  },
+  "dependencies": {
+    "chatablex-web-sdk": "file:../..",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/tsconfig": "^0.7.0",
+    "jsdom": "^26.0.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.4.11",
+    "vitest": "^3.0.0",
+    "vue-tsc": "^2.2.0"
+  },
+  "chatablex": {
+    "id": "todo-app",
+    "displayName": "Todo App",
+    "description": "待办列表示例。LLM 应先调用 todo_control(action=get) 查看当前任务，再执行添加/完成/删除。数据通过 sdk.storage 持久化。",
+    "type": "app",
+    "execution_mode": "webapp",
+    "return_direct": true,
+    "webapp": {
+      "webui": {
+        "entry": "./dist/index.html",
+        "default_width": 480,
+        "default_height": 640
+      }
+    },
+    "tools": [
+      {
+        "name": "todo_control",
+        "description": "管理待办任务。【重要】修改前必须先调用 action=get 查看当前任务列表与统计，再执行 add/toggle/delete/clear_completed，避免多轮对话中任务状态不同步。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["get", "add", "toggle", "delete", "clear_completed"],
+              "description": "get=查看当前任务（修改前必调）；add=添加任务（需 title）；toggle=切换完成（需 id）；delete=删除（需 id）；clear_completed=清除已完成"
+            },
+            "title": {
+              "type": "string",
+              "description": "action=add 时的任务标题"
+            },
+            "id": {
+              "type": "string",
+              "description": "action=toggle 或 delete 时的任务 ID（从 get 返回的 todos[].id 获取）"
+            }
+          },
+          "required": ["action"]
+        }
+      }
+    ]
+  }
+}

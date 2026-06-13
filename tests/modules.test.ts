@@ -20,8 +20,6 @@ describe('SDK modules', () => {
         'tools.list': { success: true, data: [{ id: 't1', name: 'Tool', version: '1', description: '' }] },
         'tools.execute': { success: true, data: { success: true, toolId: 't1' } },
         'tools.executeWithConfirm': { success: true, data: { success: true, toolId: 't1' } },
-        'skills.list': { success: true, data: [{ id: 'sk1', name: 'Skill', description: '', variables: [] }] },
-        'skills.execute': { success: true, data: { success: true, skillId: 'sk1' } },
         'ui.showNotification': { success: true },
         'ui.showConfirm': { success: true, data: true },
         'ui.pickFile': { success: true, data: '/path/file.txt' },
@@ -84,17 +82,6 @@ describe('SDK modules', () => {
 
       await sdk.tools.executeWithConfirm('t1', { y: 2 });
       expect(host.findByMethod('tools.executeWithConfirm')!.params).toEqual({ toolId: 't1', params: { y: 2 } });
-    });
-  });
-
-  describe('sdk.skills', () => {
-    it('lists and executes skills', async () => {
-      const sdk = await initSdk();
-      const list = await sdk.skills.list();
-      expect(list[0].id).toBe('sk1');
-
-      await sdk.skills.execute('sk1', { input: 'val' });
-      expect(host.findByMethod('skills.execute')!.params).toEqual({ skillId: 'sk1', variables: { input: 'val' } });
     });
   });
 

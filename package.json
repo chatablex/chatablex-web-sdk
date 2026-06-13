@@ -24,6 +24,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:examples": "npm test --prefix examples/counter-app && npm test --prefix examples/todo-app",
+    "build:examples": "npm run build --prefix examples/counter-app && npm run build --prefix examples/todo-app",
+    "deploy:examples": "bash scripts/deploy-examples.sh",
+    "test:e2e": "node scripts/e2e-verify.mjs",
+    "verify:all": "npm test && npm run test:examples && npm run build:examples && npm run deploy:examples && npm run test:e2e",
+    "sync-version": "node scripts/sync-version.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

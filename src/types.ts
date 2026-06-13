@@ -81,38 +81,6 @@ export interface ToolResult {
 export type ToolExecuteHandler = (params: Record<string, unknown>) => Promise<Record<string, unknown>>;
 
 // ---------------------------------------------------------------------------
-// Skill
-// ---------------------------------------------------------------------------
-
-export interface Skill {
-  id: string;
-  name: string;
-  description: string;
-  version: string;
-  author?: string;
-  category?: string;
-  toolIds: string[];
-  variables: SkillVariable[];
-  installed: boolean;
-}
-
-export interface SkillVariable {
-  name: string;
-  type: string;
-  description: string;
-  required: boolean;
-  default?: unknown;
-}
-
-export interface SkillResult {
-  success: boolean;
-  data?: unknown;
-  error?: string;
-  skillId: string;
-  toolResults?: ToolResult[];
-}
-
-// ---------------------------------------------------------------------------
 // UI
 // ---------------------------------------------------------------------------
 
@@ -211,11 +179,6 @@ export interface ChatableXTools {
   executeWithConfirm(toolId: string, params: Record<string, unknown>): Promise<ToolResult>;
 }
 
-export interface ChatableXSkills {
-  list(): Promise<Skill[]>;
-  execute(skillId: string, variables: Record<string, unknown>): Promise<SkillResult>;
-}
-
 export interface ChatableXUI {
   showNotification(message: string, type?: NotificationType): Promise<void>;
   showConfirm(title: string, message: string): Promise<boolean>;
@@ -250,7 +213,6 @@ export interface ChatableXPlatform {
 export interface ChatableXSDK {
   ai: ChatableXAI;
   tools: ChatableXTools;
-  skills: ChatableXSkills;
   ui: ChatableXUI;
   events: ChatableXEvents;
   storage: ChatableXStorage;

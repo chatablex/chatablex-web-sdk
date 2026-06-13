@@ -16,11 +16,11 @@ export function createUIModule(bridge: Bridge): ChatableXUI {
     },
 
     openTab(config: TabConfig): Promise<void> {
-      return bridge.sendMessage('ui.openTab', config as unknown as Record<string, unknown>) as Promise<void>;
+      return bridge.sendMessage('ui.openTab', config) as Promise<void>;
     },
 
     updateState(state: StateUpdate): Promise<void> {
-      return bridge.sendMessage('ui.updateState', state as Record<string, unknown>) as Promise<void>;
+      return bridge.sendMessage('ui.updateState', state) as Promise<void>;
     },
   };
 }
