@@ -33,6 +33,7 @@
   - [sdk.storage](#sdkstorage)
   - [sdk.tools](#sdktools)
   - [sdk.platform](#sdkplatform)
+  - [sdk.auth](#sdkauth)
 - [事件参考](#事件参考)
 - [权限声明](#权限声明)
 - [宿主能力矩阵](#宿主能力矩阵)
@@ -539,6 +540,51 @@ await sdk.platform.openInBrowser('https://docs.example.com/guide');
 
 ---
 
+### `sdk.auth`
+
+面向**所有** WebUI 应用的统一鉴权入口。在宿主（Flutter WebView）环境下，它会
+透明复用桌面端的登录态——你的应用**无需编写任何登录/Token 代码**，只需调用
+`getAuthHeaders()` 并附加到 `fetch` 即可。
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `getToken` | `() => Promise<AuthTokenData \| null>` | 取有效 Token（内存缓存，按需刷新）；未登录返回 `null`。 |
+| `getAuthHeaders` | `() => Promise<Record<string,string>>` | 返回 `{ Authorization: "Bearer <token>" }`，未登录则返回 `{}`。 |
+| `getUserId` | `() => string \| null` | 当前登录用户 id（同步，仅读缓存）。 |
+| `isAuthenticated` | `() => boolean` | 是否已缓存有效 Token（同步）。 |
+| `refresh` | `() => Promise<boolean>` | 强制经宿主刷新；并发调用合并为一次（single-flight）。 |
+
+```ts
+// 给任意需要鉴权的请求附加宿主登录态——无需任何登录代码。
+const res = await fetch('https://api.example.com/scenes', {
+  headers: {
+    'Content-Type': 'application/json',
+    ...(await sdk.auth.getAuthHeaders()),
+  },
+});
+
+if (!sdk.auth.isAuthenticated()) {
+  // 未登录 / 非 WebView——禁用需要鉴权的功能
+}
+
+// 后端返回 401 时，强制刷新并重试一次：
+if (res.status === 401 && (await sdk.auth.refresh())) {
+  // 用 await sdk.auth.getAuthHeaders() 重试
+}
+```
+
+**行为与保证**
+
+- **Token 仅存内存。** `refresh_token` 永不经过 bridge。
+- **下发前刷新。** 宿主在 Token 过期或临近过期时会先刷新再下发，正常情况下你
+  不会拿到过期 Token。
+- **安全降级。** 在非 WebView 或宿主未登录时，`getAuthHeaders()` 返回 `{}` 且
+  不抛异常。
+- **Provider 可插拔。** 目前仅接入 `HostAuthProvider`（WebView）；未来的浏览器/
+  统一登录 provider 可无缝替换，消费方代码无需改动。
+
+---
+
 ## 事件参考
 
 | 事件 | 载荷 | 触发时机 |
@@ -582,6 +628,7 @@ SDK 方法是薄 RPC 封装。部分宿主处理器已完整实现，部分返�
 | `sdk.ui.pickFile` | **生产可用** | 需要 `file_access` |
 | `sdk.ui.updateState` | **生产可用** | 委托给宿主 |
 | `sdk.platform.openInBrowser` | **生产可用** | 鉴权传递 |
+| `sdk.auth.*` | **生产可用** | 宿主态：经 `host.getAuthToken` 复用桌面登录（下发前刷新） |
 | `sdk.ai.chat` | **生产可用** | 需要 `ai_chat` + delegate |
 | `sdk.ai.getContext` | **部分实现** | 返回最小上下文 |
 | `sdk.ai.chatStream` | **部分实现** | 返回 `{ streaming: true }`；token 走事件 |

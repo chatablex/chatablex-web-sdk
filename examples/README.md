@@ -7,6 +7,8 @@
 | [counter-app](./counter-app/) | **React** | `counter_control` | `sdk.storage` | 计数器：先 `get` 再加减 |
 | [todo-app](./todo-app/) | **Vue 3** | `todo_control` | `sdk.storage` | 待办清单：先 `get` 再增删改 |
 
+> 鉴权用法见 [auth-usage.md](./auth-usage.md)：`sdk.auth.getAuthHeaders()` 一行接入宿主登录态（零鉴权样板）。
+
 ## 设计原则（演示可靠）
 
 1. **每个工具都有 `get` action** — LLM 多轮对话前先读取真实状态，避免幻觉。

@@ -33,6 +33,7 @@ Your WebUI runs inside a WebView. Many capabilities — native dialogs, file pic
   - [sdk.storage](#sdkstorage)
   - [sdk.tools](#sdktools)
   - [sdk.platform](#sdkplatform)
+  - [sdk.auth](#sdkauth)
 - [Events Reference](#events-reference)
 - [Permissions](#permissions)
 - [Host Capability Matrix](#host-capability-matrix)
@@ -539,6 +540,52 @@ Throws if `targetUrl` is empty or whitespace-only.
 
 ---
 
+### `sdk.auth`
+
+Unified authentication for **every** WebUI app. In a hosted (Flutter WebView)
+environment it transparently reuses the desktop login session — your app writes
+**zero** login/token code. Just call `getAuthHeaders()` and attach it to your
+`fetch`.
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `getToken` | `() => Promise<AuthTokenData \| null>` | Get a valid token (cached, refreshed on demand). `null` when not authenticated. |
+| `getAuthHeaders` | `() => Promise<Record<string,string>>` | `{ Authorization: "Bearer <token>" }`, or `{}` when not authenticated. |
+| `getUserId` | `() => string \| null` | Authenticated user id (sync, cache only). |
+| `isAuthenticated` | `() => boolean` | Whether a valid token is cached (sync). |
+| `refresh` | `() => Promise<boolean>` | Force a refresh via the host. Concurrent calls are merged (single-flight). |
+
+```ts
+// Attach the host login session to any authenticated request — no login code.
+const res = await fetch('https://api.example.com/scenes', {
+  headers: {
+    'Content-Type': 'application/json',
+    ...(await sdk.auth.getAuthHeaders()),
+  },
+});
+
+if (!sdk.auth.isAuthenticated()) {
+  // not logged in / not hosted — disable features that need auth
+}
+
+// On a 401 from your backend, force a refresh and retry once:
+if (res.status === 401 && (await sdk.auth.refresh())) {
+  // retry with await sdk.auth.getAuthHeaders()
+}
+```
+
+**Behavior & guarantees**
+
+- **Token is in-memory only.** The `refresh_token` never crosses the bridge.
+- **Pre-emptive refresh.** The host refreshes the `access_token` before sending
+  when it is expired or near expiry, so you normally never see an expired token.
+- **Safe degradation.** Outside a WebView, or when the host is logged out,
+  `getAuthHeaders()` resolves to `{}` and never throws.
+- **Pluggable provider.** Today only `HostAuthProvider` (WebView) is wired up; a
+  future browser/unified-login provider will slot in without changing your code.
+
+---
+
 ## Events Reference
 
 | Event | Payload | When fired |
@@ -582,6 +629,7 @@ SDK methods are thin RPC wrappers. Some host handlers are fully implemented; oth
 | `sdk.ui.pickFile` | **Production** | Requires `file_access` |
 | `sdk.ui.updateState` | **Production** | Delegates to host |
 | `sdk.platform.openInBrowser` | **Production** | Auth handoff |
+| `sdk.auth.*` | **Production** | Hosted: reuses desktop login via `host.getAuthToken` (pre-refresh) |
 | `sdk.ai.chat` | **Production** | Requires `ai_chat` + delegate |
 | `sdk.ai.getContext` | **Partial** | Returns minimal context |
 | `sdk.ai.chatStream` | **Partial** | Returns `{ streaming: true }`; tokens via events |

@@ -210,6 +210,47 @@ export interface ChatableXPlatform {
   openInBrowser(targetUrl: string): Promise<void>;
 }
 
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+/** Token payload returned by the host (never includes the refresh_token). */
+export interface AuthTokenData {
+  /** Bearer access token to put in the Authorization header. */
+  access_token: string;
+  /** Access token expiry, epoch milliseconds. */
+  expires_at: number;
+  /** Authenticated user id. */
+  user_id: string;
+}
+
+/**
+ * Unified auth entry point for all WebUI apps.
+ *
+ * In a hosted (Flutter WebView) environment this reuses the desktop login
+ * session via the `host.getAuthToken` bridge call — apps never implement
+ * login or token handling themselves.
+ */
+export interface ChatableXAuth {
+  /**
+   * Get a valid access token. Returns the in-memory cached token when still
+   * valid, otherwise fetches a fresh one from the host. Returns `null` when
+   * not authenticated / not hosted.
+   */
+  getToken(): Promise<AuthTokenData | null>;
+  /**
+   * Build auth headers ready to spread into a `fetch`. Returns
+   * `{ Authorization: "Bearer <token>" }` when authenticated, otherwise `{}`.
+   */
+  getAuthHeaders(): Promise<Record<string, string>>;
+  /** Currently authenticated user id, or `null`. Synchronous (cache only). */
+  getUserId(): string | null;
+  /** Whether a valid token is currently cached. Synchronous (cache only). */
+  isAuthenticated(): boolean;
+  /** Force a token refresh via the host. Resolves `true` on success. */
+  refresh(): Promise<boolean>;
+}
+
 export interface ChatableXSDK {
   ai: ChatableXAI;
   tools: ChatableXTools;
@@ -218,6 +259,7 @@ export interface ChatableXSDK {
   storage: ChatableXStorage;
   tool: ChatableXToolModule;
   platform: ChatableXPlatform;
+  auth: ChatableXAuth;
 }
 
 // ---------------------------------------------------------------------------

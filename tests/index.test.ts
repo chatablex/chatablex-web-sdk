@@ -36,6 +36,7 @@ describe('ChatableX.init', () => {
     expect(sdk.storage).toBeDefined();
     expect(sdk.tool).toBeDefined();
     expect(sdk.platform).toBeDefined();
+    expect(sdk.auth).toBeDefined();
 
     expect(ChatableX.isReady()).toBe(true);
     expect(ChatableX.getInstance()).toBe(sdk);
