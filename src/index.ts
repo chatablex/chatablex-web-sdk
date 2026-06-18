@@ -27,6 +27,7 @@ import { createStorageModule } from './modules/storage';
 import { createToolsModule } from './modules/tools';
 import { createPlatformModule } from './modules/platform';
 import { createAuthModule } from './modules/auth';
+import { createCloudModule } from './modules/cloud';
 import type { ChatableXSDK, ChatableXInitConfig, ToolInfo } from './types';
 import pkg from '../package.json';
 
@@ -79,6 +80,8 @@ export const ChatableX = {
     const toolModule = createToolModule(bridge, config.appId);
     if (toolConfig) toolModule._setInfo(toolConfig);
 
+    const authModule = createAuthModule(bridge);
+
     const sdk: ChatableXSDK = {
       ai: createAIModule(bridge),
       tools: createToolsModule(bridge),
@@ -87,7 +90,12 @@ export const ChatableX = {
       storage: createStorageModule(bridge),
       tool: toolModule,
       platform: createPlatformModule(bridge),
-      auth: createAuthModule(bridge),
+      auth: authModule,
+      cloud: createCloudModule(bridge, {
+        appId: config.appId,
+        auth: authModule,
+        apiBaseUrl: config.apiBaseUrl,
+      }),
     };
 
     // Expose on window for debugging / Flutter interop
@@ -116,3 +124,9 @@ export const ChatableX = {
 // Re-export all types
 export * from './types';
 export { Bridge } from './bridge';
+export {
+  CloudError,
+  CloudAuthRequiredError,
+  CloudSubscriptionRequiredError,
+  CloudQuotaExceededError,
+} from './modules/cloud';

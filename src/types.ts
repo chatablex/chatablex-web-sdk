@@ -161,6 +161,14 @@ export interface ChatableXInitConfig {
   debug?: boolean;
   /** Timeout in ms for the handshake with Flutter (default: 10000) */
   timeout?: number;
+  /**
+   * Base URL of the ChatableX cloud API (auth-fc), e.g.
+   * `https://chatabl-fc-prod-xxxx.cn-hangzhou.fcapp.run`. Required for
+   * `sdk.cloud` to work. When omitted, the SDK best-effort asks the host via
+   * the `host.getApiBaseUrl` bridge call; if that is also unavailable, cloud
+   * calls reject with a clear error.
+   */
+  apiBaseUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -251,6 +259,79 @@ export interface ChatableXAuth {
   refresh(): Promise<boolean>;
 }
 
+// ---------------------------------------------------------------------------
+// Cloud Storage
+// ---------------------------------------------------------------------------
+
+/** Binary payload accepted by `sdk.cloud.upload`. */
+export type CloudUploadData = Blob | ArrayBuffer | ArrayBufferView | string;
+
+export interface CloudUploadOptions {
+  /**
+   * MIME type to store the object as. Defaults to the `Blob.type` when a Blob
+   * is given, otherwise `application/octet-stream`. Must be one allowed by the
+   * server's content-type whitelist.
+   */
+  contentType?: string;
+}
+
+/** Result of a successful `sdk.cloud.upload`. */
+export interface CloudUploadResult {
+  /** App-relative key (the same `fileKey` passed to `upload`). */
+  fileKey: string;
+  /** Fully-qualified OSS object key (`user-data/{user_id}/{app_id}/{fileKey}`). */
+  objectKey: string;
+  /** Bytes uploaded. */
+  size: number;
+  /** MIME type the object was stored as. */
+  contentType: string;
+}
+
+/** A single file in the user's cloud storage for this app. */
+export interface CloudFileInfo {
+  fileKey: string;
+  size: number;
+  /** ISO-8601 timestamp. */
+  lastModified: string;
+}
+
+export interface CloudListOptions {
+  /** Restrict the listing to keys under this app-relative prefix. */
+  prefix?: string;
+}
+
+/** The user's storage usage / quota for the whole account. */
+export interface CloudUsage {
+  usedBytes: number;
+  quotaBytes: number;
+  fileCount: number;
+  /** ISO-8601 timestamp of the last server-side reconciliation, if any. */
+  reconciledAt?: string;
+}
+
+/**
+ * Cloud storage for WebUI apps. Backed by auth-fc presigned OSS URLs; the
+ * app's `appId` (from `ChatableX.init`) is injected automatically so every key
+ * is namespaced to `{user}/{app}` and apps cannot reach into each other's data.
+ *
+ * Requires an authenticated session (`sdk.auth`) and a configured cloud API
+ * base URL (see `ChatableXInitConfig.apiBaseUrl`).
+ */
+export interface ChatableXCloud {
+  /** Upload (overwrite) a file. Resolves once the bytes are stored in OSS. */
+  upload(fileKey: string, data: CloudUploadData, options?: CloudUploadOptions): Promise<CloudUploadResult>;
+  /** Download a file's bytes as a Blob. */
+  download(fileKey: string): Promise<Blob>;
+  /** Get a short-lived presigned GET URL (e.g. to feed an `<img src>`). */
+  getDownloadUrl(fileKey: string): Promise<string>;
+  /** List the current app's files for this user. */
+  list(options?: CloudListOptions): Promise<CloudFileInfo[]>;
+  /** Delete a file. Resolves even if the object did not exist. */
+  delete(fileKey: string): Promise<void>;
+  /** Read the account's storage usage / quota. */
+  usage(): Promise<CloudUsage>;
+}
+
 export interface ChatableXSDK {
   ai: ChatableXAI;
   tools: ChatableXTools;
@@ -260,6 +341,7 @@ export interface ChatableXSDK {
   tool: ChatableXToolModule;
   platform: ChatableXPlatform;
   auth: ChatableXAuth;
+  cloud: ChatableXCloud;
 }
 
 // ---------------------------------------------------------------------------

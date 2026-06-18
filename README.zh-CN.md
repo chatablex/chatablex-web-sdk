@@ -34,6 +34,7 @@
   - [sdk.tools](#sdktools)
   - [sdk.platform](#sdkplatform)
   - [sdk.auth](#sdkauth)
+  - [sdk.cloud](#sdkcloud)
 - [事件参考](#事件参考)
 - [权限声明](#权限声明)
 - [宿主能力矩阵](#宿主能力矩阵)
@@ -585,6 +586,72 @@ if (res.status === 401 && (await sdk.auth.refresh())) {
 
 ---
 
+### `sdk.cloud`
+
+面向**所有** WebUI 应用的统一云存储，让用户文件跨设备保存、不丢失。上传、下载、
+重试等细节都由 SDK 处理，你只管调方法。`appId`（来自 `ChatableX.init`）会自动带上，
+每个应用的数据互相隔离，不会串。
+
+> 需要：(1) 用户已登录（`sdk.auth`）；(2) 已配置云存储服务地址——在
+> `ChatableX.init({ apiBaseUrl })` 传入（宿主环境下也可由 ChatableX 自动提供）。
+> 上传是**付费能力**：用户需购买对应工具后才能上传，未购买时上传会被拒绝。
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `upload` | `(fileKey, data, opts?) => Promise<CloudUploadResult>` | 上传（覆盖写）。`data` 支持 `Blob`/`ArrayBuffer`/`TypedArray`/`string`。 |
+| `download` | `(fileKey) => Promise<Blob>` | 下载文件字节。 |
+| `getDownloadUrl` | `(fileKey) => Promise<string>` | 获取短期有效的下载链接（如喂给 `<img src>`）。 |
+| `list` | `(opts?) => Promise<CloudFileInfo[]>` | 列出当前应用在该用户下的文件，可按 `prefix` 过滤。 |
+| `delete` | `(fileKey) => Promise<void>` | 删除文件。 |
+| `usage` | `() => Promise<CloudUsage>` | 读取账户存储用量/配额。 |
+
+```ts
+const sdk = await ChatableX.init({
+  appId: 'math-studio',
+  apiBaseUrl: import.meta.env.VITE_CHATABLEX_API_BASE,
+});
+
+// 上传（app_id 自动注入，无需手动传）
+await sdk.cloud.upload('scenes/abc/scene.json.gz', blob, { contentType: 'application/gzip' });
+
+// 列表 / 下载 / 删除 / 用量
+const files = await sdk.cloud.list({ prefix: 'scenes/' });
+const bytes = await sdk.cloud.download('scenes/abc/scene.json.gz');
+await sdk.cloud.delete('scenes/abc/scene.json.gz');
+const { usedBytes, quotaBytes } = await sdk.cloud.usage();
+```
+
+**错误处理**（均可 `instanceof` 判断，从包根导出）：
+
+```ts
+import {
+  CloudAuthRequiredError,        // 未登录：提示登录 ChatableX
+  CloudSubscriptionRequiredError, // 未购买：引导用户购买工具
+  CloudQuotaExceededError,        // 超出存储配额，含 usedBytes / quotaBytes
+  CloudError,                     // 其他云存储错误，含 code
+} from 'chatablex-web-sdk';
+
+try {
+  await sdk.cloud.upload('big.bin', buf);
+} catch (e) {
+  if (e instanceof CloudSubscriptionRequiredError) {/* 弹出购买引导 */}
+  else if (e instanceof CloudQuotaExceededError) {/* 提示清理 / 升级，e.usedBytes/e.quotaBytes */}
+  else if (e instanceof CloudAuthRequiredError) {/* 提示登录 */}
+  else throw e;
+}
+```
+
+**行为与保证**
+
+- **鉴权透明。** 内部复用 `sdk.auth`，登录态过期会自动刷新并重试一次；用户未登录
+  时直接抛 `CloudAuthRequiredError`，不会发出无效请求。
+- **数据隔离。** 每个用户、每个应用的数据互相隔离，应用之间、用户之间都不会读到
+  对方的文件。
+- **付费能力。** 上传需用户已购买对应工具；通过捕获
+  `CloudSubscriptionRequiredError` 引导用户购买。
+
+---
+
 ## 事件参考
 
 | 事件 | 载荷 | 触发时机 |
@@ -629,6 +696,7 @@ SDK 方法是薄 RPC 封装。部分宿主处理器已完整实现，部分返�
 | `sdk.ui.updateState` | **生产可用** | 委托给宿主 |
 | `sdk.platform.openInBrowser` | **生产可用** | 鉴权传递 |
 | `sdk.auth.*` | **生产可用** | 宿主态：经 `host.getAuthToken` 复用桌面登录（下发前刷新） |
+| `sdk.cloud.*` | **生产可用** | 云端文件存储；需配置 `apiBaseUrl`，上传需购买对应工具 |
 | `sdk.ai.chat` | **生产可用** | 需要 `ai_chat` + delegate |
 | `sdk.ai.getContext` | **部分实现** | 返回最小上下文 |
 | `sdk.ai.chatStream` | **部分实现** | 返回 `{ streaming: true }`；token 走事件 |

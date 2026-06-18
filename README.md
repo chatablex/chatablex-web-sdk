@@ -34,6 +34,7 @@ Your WebUI runs inside a WebView. Many capabilities — native dialogs, file pic
   - [sdk.tools](#sdktools)
   - [sdk.platform](#sdkplatform)
   - [sdk.auth](#sdkauth)
+  - [sdk.cloud](#sdkcloud)
 - [Events Reference](#events-reference)
 - [Permissions](#permissions)
 - [Host Capability Matrix](#host-capability-matrix)
@@ -586,6 +587,65 @@ if (res.status === 401 && (await sdk.auth.refresh())) {
 
 ---
 
+### `sdk.cloud`
+
+Unified cloud storage for **all** WebUI apps — keep user files saved across
+devices without losing them. The SDK handles uploads, downloads, and retries;
+you just call the methods. The `appId` (from `ChatableX.init`) is added
+automatically, and each app's data is isolated so files never get mixed up.
+
+> Requires: (1) the user is signed in (`sdk.auth`); (2) a configured cloud
+> storage URL — pass `ChatableX.init({ apiBaseUrl })` (in a hosted environment
+> ChatableX can also provide it automatically). Uploading is a **paid
+> capability**: the user must purchase the corresponding tool before uploading,
+> otherwise the upload is rejected.
+
+| Method | Signature | Notes |
+|--------|-----------|-------|
+| `upload` | `(fileKey, data, opts?) => Promise<CloudUploadResult>` | Upload (overwrite). `data` accepts `Blob`/`ArrayBuffer`/`TypedArray`/`string`. |
+| `download` | `(fileKey) => Promise<Blob>` | Download a file's bytes. |
+| `getDownloadUrl` | `(fileKey) => Promise<string>` | Short-lived download URL (e.g. for `<img src>`). |
+| `list` | `(opts?) => Promise<CloudFileInfo[]>` | List this app's files for the user; filter by `prefix`. |
+| `delete` | `(fileKey) => Promise<void>` | Delete a file. |
+| `usage` | `() => Promise<CloudUsage>` | Read the account's storage usage / quota. |
+
+```ts
+const sdk = await ChatableX.init({
+  appId: 'math-studio',
+  apiBaseUrl: import.meta.env.VITE_CHATABLEX_API_BASE,
+});
+
+await sdk.cloud.upload('scenes/abc/scene.json.gz', blob, { contentType: 'application/gzip' });
+const files = await sdk.cloud.list({ prefix: 'scenes/' });
+const bytes = await sdk.cloud.download('scenes/abc/scene.json.gz');
+await sdk.cloud.delete('scenes/abc/scene.json.gz');
+const { usedBytes, quotaBytes } = await sdk.cloud.usage();
+```
+
+**Error handling** (all `instanceof`-checkable, exported from the package root):
+
+```ts
+import {
+  CloudAuthRequiredError,         // not logged in
+  CloudSubscriptionRequiredError, // tool not purchased — prompt the user to buy it
+  CloudQuotaExceededError,        // over storage quota; has usedBytes / quotaBytes
+  CloudError,                     // other cloud errors; has code
+} from 'chatablex-web-sdk';
+```
+
+**Behavior & guarantees**
+
+- **Transparent auth.** Reuses `sdk.auth` internally; an expired session is
+  refreshed automatically and the request retried once. When the user is not
+  signed in it throws `CloudAuthRequiredError` and sends no request.
+- **Data isolation.** Each user's and each app's data is isolated; apps and
+  users can never read each other's files.
+- **Paid capability.** Uploading requires the user to have purchased the
+  corresponding tool; catch `CloudSubscriptionRequiredError` to drive a purchase
+  prompt.
+
+---
+
 ## Events Reference
 
 | Event | Payload | When fired |
@@ -630,6 +690,7 @@ SDK methods are thin RPC wrappers. Some host handlers are fully implemented; oth
 | `sdk.ui.updateState` | **Production** | Delegates to host |
 | `sdk.platform.openInBrowser` | **Production** | Auth handoff |
 | `sdk.auth.*` | **Production** | Hosted: reuses desktop login via `host.getAuthToken` (pre-refresh) |
+| `sdk.cloud.*` | **Production** | Cloud file storage; needs `apiBaseUrl`, uploading requires purchasing the tool |
 | `sdk.ai.chat` | **Production** | Requires `ai_chat` + delegate |
 | `sdk.ai.getContext` | **Partial** | Returns minimal context |
 | `sdk.ai.chatStream` | **Partial** | Returns `{ streaming: true }`; tokens via events |
