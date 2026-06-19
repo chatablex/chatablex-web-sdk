@@ -1,11 +1,16 @@
 import type { Bridge } from '../bridge';
 import type { ToolInfo, ToolExecuteHandler, ChatableXToolModule } from '../types';
+import type { AgentLockModule } from './agentLock';
 
 /**
  * Creates the `sdk.tool` module — the primary interface for LLM-driven
  * tool execution in a ChatableX WebUI app.
  */
-export function createToolModule(bridge: Bridge, appId: string): ChatableXToolModule & { _setInfo(info: Partial<ToolInfo>): void } {
+export function createToolModule(
+  bridge: Bridge,
+  appId: string,
+  agentLock?: AgentLockModule,
+): ChatableXToolModule & { _setInfo(info: Partial<ToolInfo>): void } {
   let _info: ToolInfo = { id: appId, name: appId, version: '1.0.0', description: '' };
   let _handler: ToolExecuteHandler | null = null;
 
@@ -30,13 +35,19 @@ export function createToolModule(bridge: Bridge, appId: string): ChatableXToolMo
   bridge.addEventListener('toolExecution', async (data) => {
     const params = data as Record<string, unknown>;
     const requestId = params._requestId as string | undefined;
+
+    if (requestId && agentLock) agentLock._autoLock(requestId);
+
     const result = await dispatch(params);
+
     if (requestId && window.ChatableXBridge) {
       window.ChatableXBridge.postMessage(JSON.stringify({
         method: 'tool.executeResult',
         params: { _requestId: requestId, ...result },
       }));
     }
+
+    if (requestId && agentLock) agentLock._autoUnlock(requestId);
   });
 
   return {

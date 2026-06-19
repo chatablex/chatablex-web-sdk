@@ -169,6 +169,8 @@ export interface ChatableXInitConfig {
    * calls reject with a clear error.
    */
   apiBaseUrl?: string;
+  /** Agent lock configuration — blocks user input during tool execution. */
+  agentLock?: AgentLockConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -332,6 +334,54 @@ export interface ChatableXCloud {
   usage(): Promise<CloudUsage>;
 }
 
+// ---------------------------------------------------------------------------
+// Agent Lock
+// ---------------------------------------------------------------------------
+
+export interface AgentLockConfig {
+  /** Enable the agent lock feature (default: true). */
+  enabled?: boolean;
+  /**
+   * `"overlay"` — SDK renders a built-in transparent overlay (default).
+   * `"events-only"` — SDK only emits lock/unlock events; no overlay injected.
+   */
+  mode?: 'overlay' | 'events-only';
+  /** URL of the logo displayed in the overlay centre. Defaults to built-in Chatablex SVG. */
+  logoUrl?: string;
+  /** Message shown below the logo (default: "Agent 正在操作，请稍候…"). */
+  message?: string;
+  /** Show a cancel button on the overlay (default: true). */
+  allowCancel?: boolean;
+  /** Overlay background opacity, 0–1 (default: 0.3). */
+  opacity?: number;
+  /** Auto-unlock timeout in ms (default: 30000). 0 disables. */
+  timeout?: number;
+  /** Delay before actually removing the overlay after unlock, to avoid flicker between consecutive tools (default: 200ms). */
+  debounceUnlock?: number;
+}
+
+export type AgentLockEventType = 'lock' | 'unlock' | 'cancel' | 'timeout';
+
+export interface AgentLockEventData {
+  requestId?: string;
+  timestamp: number;
+}
+
+export type AgentLockEventHandler = (data: AgentLockEventData) => void;
+
+export interface ChatableXAgentLock {
+  /** Manually lock user interaction with an optional custom message / timeout. */
+  lock(opts?: { message?: string; timeout?: number }): void;
+  /** Manually unlock. Safe to call when already unlocked. */
+  unlock(): void;
+  /** Whether the overlay is currently active. */
+  isLocked(): boolean;
+  /** Subscribe to lock lifecycle events. Returns an unsubscribe function. */
+  on(event: AgentLockEventType, handler: AgentLockEventHandler): () => void;
+  /** Remove a previously registered handler. */
+  off(event: AgentLockEventType, handler: AgentLockEventHandler): void;
+}
+
 export interface ChatableXSDK {
   ai: ChatableXAI;
   tools: ChatableXTools;
@@ -342,6 +392,7 @@ export interface ChatableXSDK {
   platform: ChatableXPlatform;
   auth: ChatableXAuth;
   cloud: ChatableXCloud;
+  agentLock: ChatableXAgentLock;
 }
 
 // ---------------------------------------------------------------------------

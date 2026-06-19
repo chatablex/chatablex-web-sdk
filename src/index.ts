@@ -28,6 +28,7 @@ import { createToolsModule } from './modules/tools';
 import { createPlatformModule } from './modules/platform';
 import { createAuthModule } from './modules/auth';
 import { createCloudModule } from './modules/cloud';
+import { createAgentLockModule } from './modules/agentLock';
 import type { ChatableXSDK, ChatableXInitConfig, ToolInfo } from './types';
 import pkg from '../package.json';
 
@@ -77,7 +78,9 @@ export const ChatableX = {
     }
 
     // 4. Create modules
-    const toolModule = createToolModule(bridge, config.appId);
+    const agentLockModule = createAgentLockModule(bridge, config.agentLock);
+
+    const toolModule = createToolModule(bridge, config.appId, agentLockModule);
     if (toolConfig) toolModule._setInfo(toolConfig);
 
     const authModule = createAuthModule(bridge);
@@ -96,6 +99,7 @@ export const ChatableX = {
         auth: authModule,
         apiBaseUrl: config.apiBaseUrl,
       }),
+      agentLock: agentLockModule,
     };
 
     // Expose on window for debugging / Flutter interop
