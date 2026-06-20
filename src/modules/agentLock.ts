@@ -16,8 +16,16 @@ const DEFAULT_CONFIG: Required<AgentLockConfig> = {
   allowCancel: true,
   opacity: 0.3,
   timeout: 30_000,
+  turnTimeout: 0,
   debounceUnlock: 200,
 };
+
+/**
+ * Bridge event pushed by the Flutter host to lock the UI for the *entire* agent
+ * turn (from the moment the agent starts responding until the turn ends),
+ * rather than only during each individual tool execution. Payload: `{ active }`.
+ */
+const TURN_EVENT = 'agentLock';
 
 const OVERLAY_ID = '__chatablex_agent_lock_overlay__';
 
@@ -55,7 +63,7 @@ export interface AgentLockModule extends ChatableXAgentLock {
 }
 
 export function createAgentLockModule(
-  _bridge: Bridge,
+  bridge: Bridge,
   userConfig: AgentLockConfig = {},
 ): AgentLockModule {
   const cfg: Required<AgentLockConfig> = { ...DEFAULT_CONFIG, ...userConfig };
@@ -65,6 +73,12 @@ export function createAgentLockModule(
   let overlayEl: HTMLDivElement | null = null;
   let locked = false;
   let lockCount = 0;
+  /**
+   * True while an agent *turn* is in progress (driven by the host's
+   * {@link TURN_EVENT}). Keeps the overlay up across the whole response — and
+   * across the gaps between individual tool calls — until the turn ends.
+   */
+  let turnActive = false;
   let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let currentMessage = cfg.message;
@@ -181,6 +195,7 @@ export function createAgentLockModule(
     if (!locked) return;
     locked = false;
     lockCount = 0;
+    turnActive = false;
     clearTimeoutTimer();
     clearDebounceTimer();
     if (cfg.mode === 'overlay') {
@@ -189,10 +204,49 @@ export function createAgentLockModule(
     emit('unlock', { requestId });
   }
 
+  /**
+   * Release the lock only when nothing is still holding it — i.e. no agent turn
+   * is in progress and no tool execution is outstanding. This is what keeps the
+   * overlay from flickering off between tools or mid-turn.
+   */
+  function maybeUnlock(requestId?: string): void {
+    if (turnActive || lockCount > 0) return;
+    forceUnlock(requestId);
+  }
+
+  function scheduleDebouncedUnlock(requestId?: string): void {
+    clearDebounceTimer();
+    debounceTimer = setTimeout(() => maybeUnlock(requestId), cfg.debounceUnlock);
+  }
+
   function handleCancel(): void {
     const rid = undefined; // auto mode tracks this externally
+    // Explicit user cancel wins over any in-progress turn/tool tracking.
     forceUnlock(rid);
     emit('cancel', { requestId: rid });
+  }
+
+  /**
+   * Turn-level lock driven by the host (see {@link TURN_EVENT}). Holds the
+   * overlay for the entire agent response; tool-level auto lock/unlock nests
+   * inside without tearing the overlay down.
+   */
+  function setTurn(active: boolean): void {
+    if (!cfg.enabled) return;
+    if (active) {
+      turnActive = true;
+      clearDebounceTimer();
+      if (!locked) {
+        doLock(cfg.message, cfg.turnTimeout);
+      } else {
+        // Already locked by a tool — extend its timeout to the (longer) turn
+        // budget so a 30s tool timeout can't drop the overlay mid-turn.
+        startTimeout(cfg.turnTimeout);
+      }
+    } else {
+      turnActive = false;
+      if (lockCount === 0) scheduleDebouncedUnlock();
+    }
   }
 
   // Public API -----------------------------------------------------------------
@@ -229,7 +283,9 @@ export function createAgentLockModule(
     clearDebounceTimer();
     lockCount++;
     if (!locked) {
-      doLock(cfg.message, cfg.timeout, requestId);
+      // Inside a turn the (longer) turn budget governs; standalone tool calls
+      // keep the per-tool timeout.
+      doLock(cfg.message, turnActive ? cfg.turnTimeout : cfg.timeout, requestId);
     }
   }
 
@@ -237,19 +293,21 @@ export function createAgentLockModule(
     if (!cfg.enabled) return;
     lockCount = Math.max(0, lockCount - 1);
     if (lockCount === 0) {
-      clearDebounceTimer();
-      debounceTimer = setTimeout(() => {
-        if (lockCount === 0) {
-          forceUnlock(requestId);
-        }
-      }, cfg.debounceUnlock);
+      scheduleDebouncedUnlock(requestId);
     }
   }
 
   function _destroy(): void {
+    if (removeTurnListener) removeTurnListener();
     forceUnlock();
     listeners.clear();
   }
+
+  // Listen for host-driven turn lock/unlock. Payload shape: `{ active: boolean }`.
+  const removeTurnListener = bridge.addEventListener(TURN_EVENT, (data) => {
+    const active = !!(data as { active?: unknown } | undefined)?.active;
+    setTurn(active);
+  });
 
   return { lock, unlock, isLocked, on, off, _autoLock, _autoUnlock, _destroy };
 }

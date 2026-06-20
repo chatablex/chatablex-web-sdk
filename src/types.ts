@@ -354,8 +354,15 @@ export interface AgentLockConfig {
   allowCancel?: boolean;
   /** Overlay background opacity, 0–1 (default: 0.3). */
   opacity?: number;
-  /** Auto-unlock timeout in ms (default: 30000). 0 disables. */
+  /** Auto-unlock timeout for a single tool execution, in ms (default: 30000). 0 disables. */
   timeout?: number;
+  /**
+   * Safety auto-unlock timeout for a whole agent turn, in ms (default: 0 =
+   * disabled, rely on the host's turn-end signal). When the host drives a
+   * turn-level lock (the lock spans the entire agent response, not just one
+   * tool), this acts purely as a fallback in case the turn-end signal is lost.
+   */
+  turnTimeout?: number;
   /** Delay before actually removing the overlay after unlock, to avoid flicker between consecutive tools (default: 200ms). */
   debounceUnlock?: number;
 }

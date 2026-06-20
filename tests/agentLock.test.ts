@@ -327,6 +327,105 @@ describe('sdk.agentLock', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Turn-level lock (host-driven `agentLock` bridge event)
+  // -----------------------------------------------------------------------
+  it('locks for the whole turn on agentLock:{active:true} and unlocks on {active:false}', async () => {
+    const host = createMockHost({ responses: { sdk_init: DEFAULT_SDK_INIT_RESPONSE } });
+    const { ChatableX } = await import('../src/index');
+    const sdk = await ChatableX.init({ appId: 'test-app' });
+
+    expect(sdk.agentLock.isLocked()).toBe(false);
+
+    host.pushEvent('agentLock', { active: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sdk.agentLock.isLocked()).toBe(true);
+    expect(getOverlay()).not.toBeNull();
+
+    host.pushEvent('agentLock', { active: false });
+    await vi.advanceTimersByTimeAsync(250); // debounce
+    expect(sdk.agentLock.isLocked()).toBe(false);
+    expect(getOverlay()).toBeNull();
+  });
+
+  it('keeps overlay up across tool calls for the entire turn (no mid-turn flicker)', async () => {
+    const host = createMockHost({ responses: { sdk_init: DEFAULT_SDK_INIT_RESPONSE } });
+    const { ChatableX } = await import('../src/index');
+    const sdk = await ChatableX.init({ appId: 'test-app' });
+    sdk.tool.onExecute(async () => ({ success: true, data: 'ok' }));
+
+    host.pushEvent('agentLock', { active: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sdk.agentLock.isLocked()).toBe(true);
+
+    // A tool runs and finishes inside the turn — overlay must stay up even past
+    // the per-tool debounce window because the turn is still active.
+    host.pushEvent('toolExecution', { action: 'a', _requestId: 'req_1', _toolName: 'test-app' });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(sdk.agentLock.isLocked()).toBe(true);
+
+    // Long gap between tools (would exceed a 30s per-tool timeout) — still locked.
+    await vi.advanceTimersByTimeAsync(40_000);
+    expect(sdk.agentLock.isLocked()).toBe(true);
+
+    host.pushEvent('agentLock', { active: false });
+    await vi.advanceTimersByTimeAsync(250);
+    expect(sdk.agentLock.isLocked()).toBe(false);
+  });
+
+  it('does not unlock mid-turn when a tool finishes before the turn ends', async () => {
+    const host = createMockHost({ responses: { sdk_init: DEFAULT_SDK_INIT_RESPONSE } });
+    const { ChatableX } = await import('../src/index');
+    const sdk = await ChatableX.init({ appId: 'test-app' });
+    sdk.tool.onExecute(async () => ({ success: true, data: 'ok' }));
+
+    host.pushEvent('agentLock', { active: true });
+    host.pushEvent('toolExecution', { action: 'a', _requestId: 'req_1', _toolName: 'test-app' });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(sdk.agentLock.isLocked()).toBe(true);
+
+    // turn ends while no tool is running -> debounced unlock
+    host.pushEvent('agentLock', { active: false });
+    expect(sdk.agentLock.isLocked()).toBe(true); // still within debounce
+    await vi.advanceTimersByTimeAsync(250);
+    expect(sdk.agentLock.isLocked()).toBe(false);
+  });
+
+  it('turnTimeout acts as a safety net when the turn-end signal is lost', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const host = createMockHost({ responses: { sdk_init: DEFAULT_SDK_INIT_RESPONSE } });
+    const { ChatableX } = await import('../src/index');
+    const sdk = await ChatableX.init({ appId: 'test-app', agentLock: { turnTimeout: 5000 } });
+
+    host.pushEvent('agentLock', { active: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sdk.agentLock.isLocked()).toBe(true);
+
+    // No {active:false} ever arrives — safety timeout releases the lock.
+    vi.advanceTimersByTime(5000);
+    expect(sdk.agentLock.isLocked()).toBe(false);
+    warnSpy.mockRestore();
+  });
+
+  it('cancel during a turn fully unlocks and does not immediately re-lock', async () => {
+    const host = createMockHost({ responses: { sdk_init: DEFAULT_SDK_INIT_RESPONSE } });
+    const { ChatableX } = await import('../src/index');
+    const sdk = await ChatableX.init({ appId: 'test-app', agentLock: { allowCancel: true } });
+    const cancelHandler = vi.fn();
+    sdk.agentLock.on('cancel', cancelHandler);
+
+    host.pushEvent('agentLock', { active: true });
+    await vi.advanceTimersByTimeAsync(0); // queueMicrotask binds the button
+
+    const btn = document.getElementById('__ctx_agent_lock_cancel__');
+    expect(btn).not.toBeNull();
+    btn!.click();
+
+    expect(sdk.agentLock.isLocked()).toBe(false);
+    expect(cancelHandler).toHaveBeenCalledTimes(1);
+    expect(getOverlay()).toBeNull();
+  });
+
+  // -----------------------------------------------------------------------
   // Custom timeout via lock() opts
   // -----------------------------------------------------------------------
   it('lock() opts.timeout overrides default', async () => {
