@@ -110,15 +110,15 @@ export function createAgentLockModule(
     ].join(';');
 
     el.innerHTML = `
-      <img src="${logoSrc}" alt="" style="width:48px;height:48px;animation:__ctx_spin 1.5s linear infinite;" />
-      <p style="margin:12px 0 0;font:14px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;color:#666;">${message}</p>
+      <img src="${logoSrc}" alt="" style="width:48px;height:48px;animation:__ctx_bounce 0.8s ease-in-out infinite;" />
+      <p style="margin:12px 0 0;font:14px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;color:#444;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 -1px 0 #fff,0 1px 0 #fff,-1px 0 0 #fff,1px 0 0 #fff;">${message}</p>
       ${cfg.allowCancel ? '<button id="__ctx_agent_lock_cancel__" style="margin-top:16px;background:none;border:none;color:#6366f1;font:13px -apple-system,BlinkMacSystemFont,sans-serif;cursor:pointer;text-decoration:underline;padding:4px 8px;">取消</button>' : ''}
     `;
 
     if (!document.getElementById('__ctx_agent_lock_style__')) {
       const style = document.createElement('style');
       style.id = '__ctx_agent_lock_style__';
-      style.textContent = '@keyframes __ctx_spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}';
+      style.textContent = '@keyframes __ctx_bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}';
       document.head.appendChild(style);
     }
 
