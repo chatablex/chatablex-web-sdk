@@ -47,6 +47,16 @@ export class CloudSubscriptionRequiredError extends CloudError {
   }
 }
 
+/** Thrown when the requested object does not exist in cloud storage (HTTP 404). */
+export class CloudNotFoundError extends CloudError {
+  readonly fileKey: string;
+  constructor(fileKey: string, message = 'cloud file not found') {
+    super(message, 404);
+    this.name = 'CloudNotFoundError';
+    this.fileKey = fileKey;
+  }
+}
+
 /** Thrown when the upload would exceed the user's storage quota (code `40301`). */
 export class CloudQuotaExceededError extends CloudError {
   readonly usedBytes: number;
@@ -200,6 +210,7 @@ export function createCloudModule(bridge: Bridge, deps: CloudModuleDeps): Chatab
       }
       if (code === 40302) throw new CloudSubscriptionRequiredError(message);
       if (res.status === 401) throw new CloudAuthRequiredError(message);
+      if (res.status === 404) throw new CloudNotFoundError('', message);
       throw new CloudError(message, code ?? res.status);
     }
 
@@ -260,6 +271,7 @@ export function createCloudModule(bridge: Bridge, deps: CloudModuleDeps): Chatab
       const url = await this.getDownloadUrl(fileKey);
       const res = await fetch(url, { method: 'GET' });
       if (!res.ok) {
+        if (res.status === 404) throw new CloudNotFoundError(fileKey);
         throw new CloudError(`OSS download failed: HTTP ${res.status}`, res.status);
       }
       return res.blob();

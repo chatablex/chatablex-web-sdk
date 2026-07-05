@@ -86,7 +86,7 @@ describe('sdk.cloud', () => {
         return jsonRes(200, {
           success: true,
           code: 0,
-          data: { upload_url: 'https://oss.test/put?sig=1', object_key: 'user-data/u-42/test-app/foo.json', expires_in: 3600 },
+          data: { upload_url: 'https://oss.test/put?sig=1', object_key: 'user-data/usr_01hxk8n3m2q4r6t8v0w2y4z6a8/test-app/foo.json', expires_in: 3600 },
         });
       }
       if (url.startsWith('https://oss.test/put')) return jsonRes(200, {});
@@ -110,7 +110,7 @@ describe('sdk.cloud', () => {
 
     expect(result).toMatchObject({
       fileKey: 'foo.json',
-      objectKey: 'user-data/u-42/test-app/foo.json',
+      objectKey: 'user-data/usr_01hxk8n3m2q4r6t8v0w2y4z6a8/test-app/foo.json',
       contentType: 'application/json',
     });
     expect(result.size).toBeGreaterThan(0);

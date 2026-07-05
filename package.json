@@ -1,6 +1,6 @@
 {
   "name": "chatablex-web-sdk",
-  "version": "1.0.37",
+  "version": "1.0.38",
   "description": "ChatableX Web SDK for AI App WebUI development. Provides bridge communication with the ChatableX Flutter client.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

@@ -169,6 +169,14 @@ export interface ChatableXInitConfig {
    * calls reject with a clear error.
    */
   apiBaseUrl?: string;
+  /**
+   * Browser standalone mode (no ChatableXBridge). When `'auto'` (default),
+   * activates when `?auth_code=` is present or a prior web session exists in
+   * localStorage. Requires `apiBaseUrl`.
+   */
+  standalone?: boolean | 'auto';
+  /** localStorage prefix for standalone web auth; default `chatablex_{appId}`. */
+  webAuthStorageKey?: string;
   /** Agent lock configuration — blocks user input during tool execution. */
   agentLock?: AgentLockConfig;
 }
@@ -281,7 +289,7 @@ export interface CloudUploadOptions {
 export interface CloudUploadResult {
   /** App-relative key (the same `fileKey` passed to `upload`). */
   fileKey: string;
-  /** Fully-qualified OSS object key (`user-data/{user_id}/{app_id}/{fileKey}`). */
+  /** Fully-qualified OSS object key (`user-data/{usr_typeid}/{app_id}/{fileKey}`). */
   objectKey: string;
   /** Bytes uploaded. */
   size: number;
@@ -332,6 +340,138 @@ export interface ChatableXCloud {
   delete(fileKey: string): Promise<void>;
   /** Read the account's storage usage / quota. */
   usage(): Promise<CloudUsage>;
+}
+
+// ---------------------------------------------------------------------------
+// Official content publishing (prd-official-content-publishing-202606)
+// ---------------------------------------------------------------------------
+
+/** One file in an official content bundle. Binary files use base64 encoding. */
+export interface OfficialFile {
+  /** Bundle-relative path, e.g. "component.json" / "preview.svg". */
+  path: string;
+  /** MIME type (must be in the resource type's whitelist). */
+  mime: string;
+  /** "utf8" (default) for text or "base64" for binary content. */
+  encoding?: 'utf8' | 'base64';
+  /** File content (utf8 string or base64). */
+  content: string;
+}
+
+/** Request payload for `sdk.official.publish`. */
+export interface OfficialPublishRequest {
+  /** Owning app, e.g. "math-studio". */
+  appId: string;
+  /** Resource type registered with an adapter, e.g. "component". */
+  resourceType: string;
+  /** Stable slug for the resource. */
+  resourceId: string;
+  /** Bundle files. */
+  files: OfficialFile[];
+  /** Free-form metadata (name/description/tags/...). */
+  metadata?: Record<string, unknown>;
+  /**
+   * Optional client-declared content hash. When omitted the SDK computes it
+   * with {@link computeOfficialContentHash}; the server always recomputes and
+   * rejects a mismatch.
+   */
+  contentHash?: string;
+}
+
+/** A structured validation/processing error attached to a failed job. */
+export interface OfficialPublishError {
+  field?: string;
+  code: string;
+  message: string;
+}
+
+export type OfficialJobState = 'validating' | 'staged' | 'published' | 'failed';
+
+/** A publish job; poll {@link ChatableXOfficial.getPublishJob} for its state. */
+export interface OfficialPublishJob {
+  jobId: string;
+  appId: string;
+  resourceType: string;
+  resourceId: string;
+  contentHash: string;
+  state: OfficialJobState;
+  contentVersion?: string;
+  errors: OfficialPublishError[];
+  actor: string;
+}
+
+/** One entry in a channel manifest (per resource). */
+export interface OfficialCatalogEntry {
+  id: string;
+  version: string;
+  hash: string;
+  /** Public CDN base URL prefix for this version's files. */
+  baseUrl?: string;
+  deprecated?: boolean;
+  hiddenFromLatest?: boolean;
+  replacementId?: string;
+  /** Adapter-specific fields (e.g. name/preview/path for components). */
+  entry?: Record<string, unknown>;
+}
+
+/** The public, cacheable channel manifest returned by `getCatalog`. */
+export interface OfficialCatalog {
+  appId: string;
+  resourceType: string;
+  channel: string;
+  etag: number;
+  entries: OfficialCatalogEntry[];
+}
+
+/** Options for `sdk.official.deprecate`. */
+export interface OfficialDeprecateOptions {
+  hiddenFromLatest?: boolean;
+  replacementId?: string;
+}
+
+/** One (app, resourceType) the caller may publish/manage. */
+export interface OfficialCapabilityScope {
+  appId: string;
+  resourceType: string;
+  canPublish: boolean;
+  canManage: boolean;
+}
+
+/** The caller's official publish/manage capabilities (FR-12). */
+export interface OfficialCapabilities {
+  isOfficial: boolean;
+  /** Role-based access to all registered resource types. */
+  wildcard: boolean;
+  scopes: OfficialCapabilityScope[];
+}
+
+/**
+ * Unified client for the official content publishing service. Publish/manage
+ * methods carry the auth-fc session automatically; `getCatalog` is anonymous.
+ */
+export interface ChatableXOfficial {
+  /** Publish a bundle. Resolves with the (possibly failed) job. */
+  publish(req: OfficialPublishRequest): Promise<OfficialPublishJob>;
+  /** Fetch a publish job by id. */
+  getPublishJob(jobId: string): Promise<OfficialPublishJob>;
+  /** Deprecate / hide / replace a resource (no hard delete). */
+  deprecate(
+    appId: string,
+    resourceType: string,
+    resourceId: string,
+    options?: OfficialDeprecateOptions,
+  ): Promise<void>;
+  /** Roll latest back to a previous version (empty toVersion = previous). */
+  rollback(
+    appId: string,
+    resourceType: string,
+    resourceId: string,
+    toVersion?: string,
+  ): Promise<void>;
+  /** Read the public channel manifest (anonymous, cacheable). */
+  getCatalog(appId: string, resourceType: string, channel?: string): Promise<OfficialCatalog>;
+  /** Read the caller's publish/manage capabilities. */
+  getCapabilities(): Promise<OfficialCapabilities>;
 }
 
 // ---------------------------------------------------------------------------
@@ -399,6 +539,7 @@ export interface ChatableXSDK {
   platform: ChatableXPlatform;
   auth: ChatableXAuth;
   cloud: ChatableXCloud;
+  official: ChatableXOfficial;
   agentLock: ChatableXAgentLock;
 }
 

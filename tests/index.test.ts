@@ -11,7 +11,9 @@ describe('ChatableX.init', () => {
     delete window.__CHATABLEX_DISPATCH__;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    const { ChatableX } = await import('../src/index');
+    ChatableX._resetForTests();
     vi.resetModules();
   });
 

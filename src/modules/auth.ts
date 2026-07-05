@@ -94,8 +94,8 @@ export class HostAuthProvider implements AuthProvider {
 
 /**
  * Build the `auth` module. Selects the provider for the current environment;
- * today there is only `HostAuthProvider`. A future `WebAuthProvider`
- * (browser / unified login) can be slotted in here without changing callers.
+ * today there is only `HostAuthProvider`. Browser sessions use `WebAuthProvider`
+ * via standalone `ChatableX.init()` (see `modules/webAuth.ts`).
  */
 export function createAuthModule(bridge: Bridge): ChatableXAuth {
   return new HostAuthProvider(bridge);
